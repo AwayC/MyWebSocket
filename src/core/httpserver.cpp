@@ -6,40 +6,86 @@
 #include <cassert>
 #include <iostream>
 #include <unordered_map>
+#include <sys/proc.h>
 
 /************* endPoint *************/
-httpserver::endPoint::endPoint(uv_stream_t *client, httpserver* owner) : _client(client)
+HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(client)
 {
-    _owner = owner;
-    _parser = new http_parser();
-    memset(&_settings, 0, sizeof(http_parser_settings));
-    _settings.on_message_begin = onReqMessageBegin;
-    _settings.on_url = onReqURL;
-    _settings.on_header_field = onReqHeaderField;
-    _settings.on_header_value = onReqHeaderValue;
-    _settings.on_headers_complete = onReqHeaderComplete;
-    _settings.on_body = onReqBody;
-    _settings.on_message_complete = onReqMessageComplete;
+    m_owner = owner;
+    m_recvBufSize = HTTP_DEFAULT_RECV_BUF_SIZE;
+    m_recvBuf = new char[m_recvBufSize];
+    memset(&m_settings, 0, sizeof(http_parser_settings));
+    m_settings.on_message_begin = onReqMessageBegin;
+    m_settings.on_url = onReqURL;
+    m_settings.on_header_field = onReqHeaderField;
+    m_settings.on_header_value = onReqHeaderValue;
+    m_settings.on_headers_complete = onReqHeaderComplete;
+    m_settings.on_body = onReqBody;
+    m_settings.on_message_complete = onReqMessageComplete;
 
-    http_parser_init(_parser, HTTP_REQUEST);
-    _parser->data = this;
+    //keep alive
+    m_isKeepAlive = false;
+    uv_timer_init(owner->m_loop, &m_keepAliveTimer);
+    m_keepAliveTimer.data = this;
+
+    //http parser
+    http_parser_init(&m_parser, HTTP_REQUEST);
+    m_parser.data = this;
 };
-httpserver::endPoint::~endPoint()
+HttpServer::Session::~Session()
 {
-    delete _parser;
+    delete[] m_recvBuf;
 };
 
-void httpserver::endPoint::recv_alloc_cb(uv_handle_t* handle,
+bool HttpServer::Session::needKeepConnection (httpReq* req)
+{
+    bool ret = false;
+    if (req->headers.find("Connection") != req->headers.end())
+    {
+        ret = req->headers["Connection"] == "keep-alive";
+    } else
+    {
+        std::cout << req->version << std::endl;
+    }
+    return ret;
+}
+
+void HttpServer::Session::closeTcp(uv_stream_t* client)
+{
+    uv_read_stop(client);
+    uv_close((uv_handle_t*)client, [](uv_handle_t* client){
+        Session* self = static_cast<Session*>(client->data);
+        delete self;
+        delete client;
+    });
+}
+
+void HttpServer::Session::recv_alloc_cb(uv_handle_t* handle,
                         size_t suggested_size,
                         uv_buf_t* buf)
 {
-    buf->base = new char[suggested_size];
+    Session* self = static_cast<Session*>(handle->data);
+    int bufSize = self->m_recvBufSize;
+    if (bufSize < suggested_size)
+    {
+        while (bufSize < suggested_size)
+        {
+            bufSize += (bufSize << 1);
+        }
+        self->m_recvBufSize = bufSize;
+        self->m_recvBuf = static_cast<char*>(realloc(self->m_recvBuf, bufSize));
+    }
+
+    buf->base = self->m_recvBuf;
     buf->len = suggested_size;
 }
-void httpserver::endPoint::recv_cb(uv_stream_t* client,
+
+void HttpServer::Session::recv_cb(uv_stream_t* client,
                        ssize_t nread,
                        const uv_buf_t* buf)
 {
+    Session* ep = (Session*)(client->data);
+
     if (nread < 0)
     {
         if (nread != UV_EOF) {
@@ -47,31 +93,26 @@ void httpserver::endPoint::recv_cb(uv_stream_t* client,
         } else {
             std::cout << "Connection closed by peer" << std::endl;
         }
-        uv_read_stop(client);
-        uv_close((uv_handle_t*)client, [](uv_handle_t* client){
-            delete (endPoint*)client->data;
-            delete client;
-        });
-        if (buf->base)
-        {
-            delete[] buf->base;
-        }
-        return ;
+        ep->stopKeepAliveTimer();
+        closeTcp(client);
+        return;
+    }
+
+    if (ep->m_isKeepAlive)
+    {
+        ep->stopKeepAliveTimer();
     }
 
     if (buf->base)
     {
-        endPoint* ep = (endPoint*)(client->data);
-        ep->handle_request(buf->base, nread);
-        delete[] buf->base;
+        ep->handle_request(buf->base, nread, client);
     }
 }
 
-void httpserver::endPoint::handle_request(char* data, size_t size)
+void HttpServer::Session::handle_request(char* data, size_t size, uv_stream_t* client)
 {
-    size_t nparsed = http_parser_execute(_parser, &_settings, data, size);
-
-    if (_parser->upgrade)
+    size_t nparsed = http_parser_execute(&m_parser, &m_settings, data, size);
+    if (m_parser.upgrade)
     {
         //todo: upgrade to websocket
 
@@ -80,104 +121,135 @@ void httpserver::endPoint::handle_request(char* data, size_t size)
         std::cerr << "parse error" << std::endl;
     } else
     {
-        if (_req._method == HTTP_GET)
+        if (m_req.method == HTTP_GET)
         {
-            _owner->handle_get(&_req, &_resp);
-        } else if (_req._method == HTTP_POST)
+            m_owner->handle_get(&m_req, &m_resp);
+        } else if (m_req.method == HTTP_POST)
         {
-            _owner->handle_post(&_req, &_resp);
+            m_owner->handle_post(&m_req, &m_resp);
         }
-        _owner->onRequestCb(&_req, &_resp);
+        m_owner->onRequestCb(&m_req, &m_resp);
 
-
-        return;
+        if (!needKeepConnection(&m_req))
+        {
+            std::cout << "close connection" << std::endl;
+            closeTcp(client);
+        } else
+        {
+            //keep alive
+            std::cout << "keep alive connection" << std::endl;
+            m_isKeepAlive = true;
+            startKeepAliveTimer();
+        }
     }
 }
 
+void HttpServer::Session::keepAliveTimerCb(uv_timer_t* timer)
+{
+    Session* ep = (Session*)timer->data;
+    closeTcp(ep->m_client);
+}
 
-int httpserver::endPoint::onReqMessageBegin(http_parser* parser)
+void HttpServer::Session::startKeepAliveTimer()
+{
+    uv_timer_start(&m_keepAliveTimer, keepAliveTimerCb, m_owner->m_keepAliveTimeout * 1000, 0);
+    m_isKeepAlive = true;
+}
+
+void HttpServer::Session::stopKeepAliveTimer()
+{
+    m_isKeepAlive = false;
+    uv_timer_stop(&m_keepAliveTimer);
+}
+
+
+int HttpServer::Session::onReqMessageBegin(http_parser* parser)
 {
     std::cout << "onReqMessageBegin" << std::endl;
     return 0;
 }
 
-int httpserver::endPoint::onReqHeaderComplete(http_parser* parser)
+int HttpServer::Session::onReqHeaderComplete(http_parser* parser)
 {
-    endPoint* ep = (endPoint*)parser->data;
+    Session* ep = (Session*)parser->data;
     assert(ep != nullptr);
-    ep->_req._method = parser->method;
-    ep->_req._version = std::to_string(parser->http_major) + "." + std::to_string(parser->http_minor);
+    ep->m_req.method = parser->method;
+    ep->m_req.version = std::to_string(parser->http_major) + "." + std::to_string(parser->http_minor);
     std::cout << "onReqHeaderComplete" << std::endl;
     return 0;
 }
 
-int httpserver::endPoint::onReqMessageComplete(http_parser* parser)
+int HttpServer::Session::onReqMessageComplete(http_parser* parser)
 {
     std::cout << "onReqMessageComplete" << std::endl;
     return 0;
 }
 
-int httpserver::endPoint::onReqURL(http_parser* parser, const char* at, size_t length)
+int HttpServer::Session::onReqURL(http_parser* parser, const char* at, size_t length)
 {
-    endPoint* ep = (endPoint*)parser->data;
+    Session* ep = (Session*)parser->data;
     assert(ep != nullptr);
-    ep->_req._url.assign(at, length);
+    ep->m_req.url.assign(at, length);
     return 0;
 }
 
-int httpserver::endPoint::onReqHeaderField(http_parser* parser, const char* at, size_t length)
+int HttpServer::Session::onReqHeaderField(http_parser* parser, const char* at, size_t length)
 {
-    endPoint* ep = (endPoint*)parser->data;
+    Session* ep = (Session*)parser->data;
     assert(ep != nullptr);
-    ep->_tmpKey.assign(at, length);
+    ep->m_tmpKey.assign(at, length);
     return 0;
 }
 
-int httpserver::endPoint::onReqHeaderValue(http_parser* parser, const char* at, size_t length)
+int HttpServer::Session::onReqHeaderValue(http_parser* parser, const char* at, size_t length)
 {
     std::string value(at, length);
-    endPoint* ep = (endPoint*)parser->data;
+    Session* ep = (Session*)parser->data;
     assert(ep != nullptr);
-    ep->_req._headers.insert(std::make_pair(ep->_tmpKey, value));
+    ep->m_req.headers.insert(std::make_pair(ep->m_tmpKey, value));
     return 0;
 }
 
-int httpserver::endPoint::onReqBody(http_parser* parser, const char* at, size_t length)
+int HttpServer::Session::onReqBody(http_parser* parser, const char* at, size_t length)
 {
-    endPoint* ep = (endPoint*)parser->data;
+    Session* ep = (Session*)parser->data;
     assert(ep != nullptr);
-    ep->_req._body.append(at, length);
+    ep->m_req.body.append(at, length);
     return 0;
 }
 
-/************* httpserver *************/
+/************* HttpServer *************/
 
-void httpserver::handle_connect(uv_stream_t* client)
+void HttpServer::handle_connect(uv_stream_t* client)
 {
-    endPoint* ep = new endPoint(client, this);
+    Session* ep = new Session(client, this);
     std::cout << "handle request" << std::endl;
     client->data = ep;
-    uv_read_start(client, endPoint::recv_alloc_cb, endPoint::recv_cb);
+    uv_read_start(client, Session::recv_alloc_cb, Session::recv_cb);
 }
 
 
-httpserver::httpserver(const std::string& ip, int port)
-    : ip(ip), port(port) , onConnectCb(nullptr) ,onRequestCb(nullptr) {
-    loop = uv_default_loop();
-    tcp_svr = new uv_tcp_t();
-    int ret = uv_tcp_init(loop, tcp_svr);
+HttpServer::HttpServer(const std::string& ip, int port)
+    : m_ip(ip),
+    m_port(port),
+    onConnectCb(nullptr) ,onRequestCb(nullptr)
+{
+    m_keepAliveTimeout = HTTP_DEFAULT_KEEP_ALIVE_TIMEOUT;
+    m_loop = uv_default_loop();
+    m_tcp_svr = new uv_tcp_t();
+    int ret = uv_tcp_init(m_loop, m_tcp_svr);
     if (ret != 0)
     {
         std::cerr << "uv_tcp_init failed" << std::endl;
     }
     assert(ret == 0);
 
-    tcp_svr->data = this;
+    m_tcp_svr->data = this;
 
     struct sockaddr_in addr;
     uv_ip4_addr(ip.c_str(), port, &addr);
     //bind
-    ret = uv_tcp_bind(tcp_svr, (const struct sockaddr *)&addr, 0);
+    ret = uv_tcp_bind(m_tcp_svr, (const struct sockaddr *)&addr, 0);
     if (ret != 0)
     {
         std::cerr << "uv_tcp_bind failed" << std::endl;
@@ -185,7 +257,7 @@ httpserver::httpserver(const std::string& ip, int port)
     assert(ret == 0);
 
     //listen
-    ret = uv_listen((uv_stream_t*)tcp_svr, SOMAXCONN, inter_on_connect);
+    ret = uv_listen((uv_stream_t*)m_tcp_svr, SOMAXCONN, inter_on_connect);
     if (ret != 0)
     {
         std::cerr << "uv_listen failed" << std::endl;
@@ -193,19 +265,19 @@ httpserver::httpserver(const std::string& ip, int port)
     assert(ret == 0);
 }
 
-void httpserver::start() {
+void HttpServer::start() {
     std::cout << "server start" << std::endl;
-    uv_run(loop, UV_RUN_DEFAULT);
+    uv_run(m_loop, UV_RUN_DEFAULT);
 }
 
-httpserver::~httpserver() {
-    delete tcp_svr;
-    uv_loop_close(loop);
+HttpServer::~HttpServer() {
+    delete m_tcp_svr;
+    uv_loop_close(m_loop);
 }
 
-void httpserver::inter_on_connect(uv_stream_t *server, int status)
+void HttpServer::inter_on_connect(uv_stream_t *server, int status)
 {
-    httpserver* self = static_cast<httpserver*>(server->data);
+    HttpServer* self = static_cast<HttpServer*>(server->data);
     assert(self != nullptr);
     if (status < 0)
     {
@@ -216,7 +288,7 @@ void httpserver::inter_on_connect(uv_stream_t *server, int status)
 
     uv_tcp_t *client = new uv_tcp_t();
     assert(client != nullptr);
-    uv_tcp_init(self->loop, client);
+    uv_tcp_init(self->m_loop, client);
 
     if (uv_accept(server, (uv_stream_t*)client) == 0)
     {
@@ -236,40 +308,45 @@ void httpserver::inter_on_connect(uv_stream_t *server, int status)
     }
 }
 
-void httpserver::post(const std::string& url, std::function<void(httpReq*, httpResp*)>& callback)
+void HttpServer::post(const std::string& url, std::function<void(httpReq*, httpResp*)>& callback)
 {
     post_callbacks.insert(std::make_pair(url, callback));
 }
 
-void httpserver::get(const std::string& url, std::function<void(httpReq*, httpResp*)>& callback)
+void HttpServer::get(const std::string& url, std::function<void(httpReq*, httpResp*)>& callback)
 {
     get_callbacks.insert(std::make_pair(url, callback));
 }
 
-void httpserver::handle_post(httpReq* req, httpResp* resp)
+void HttpServer::handle_post(httpReq* req, httpResp* resp)
 {
-    auto it = post_callbacks.find(req->_url);
+    auto it = post_callbacks.find(req->url);
     if (it != post_callbacks.end())
     {
         it->second(req, resp);
     }
 }
 
-void httpserver::handle_get(httpReq* req, httpResp* resp)
+void HttpServer::handle_get(httpReq* req, httpResp* resp)
 {
-    auto it = get_callbacks.find(req->_url);
+    auto it = get_callbacks.find(req->url);
     if (it != get_callbacks.end())
     {
         it->second(req, resp);
     }
 }
 
-void httpserver::onConnect(const std::function<void(uv_tcp_t* client)>& callback)
+void HttpServer::onConnect(const std::function<void(uv_tcp_t* client)>& callback)
 {
     onConnectCb = callback;
 }
 
-void httpserver::onRequest(const std::function<void(httpReq*, httpResp*)>& callback)
+void HttpServer::onRequest(const std::function<void(httpReq*, httpResp*)>& callback)
 {
     onRequestCb = callback;
+}
+
+void HttpServer::setKeepAliveTimeout(int timeout)
+{
+    m_keepAliveTimeout = timeout;
 }
