@@ -6,6 +6,11 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 add_library(http-parser
-    http_parser.c
-    http_parser.h
+        http_parser.c
+        http_parser.h
+)
+
+target_include_directories(http-parser
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
