@@ -7,20 +7,25 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(src/util/libuv)
-add_subdirectory(src/util/http-parser)
-
+add_subdirectory(third-party/libuv)
+add_subdirectory(third-party/http-parser)
+add_subdirectory(third-party/leptjson)
 
 add_library(websocket
     src/core/httpserver.cpp
+    src/core/httpResp.cpp
 )
 
-target_link_libraries(websocket
+target_link_libraries(websocket PUBLIC
     uv_a
     http-parser
+    leptjson
 )
 
-
+target_include_directories(websocket
+    PUBLIC
+    include/
+)
 
 add_executable(MyWebsocket main.cpp)
 add_executable(client client.cpp)

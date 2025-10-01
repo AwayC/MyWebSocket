@@ -7,9 +7,12 @@
 #include <iostream>
 #include <unordered_map>
 #include <sys/proc.h>
+#include <fstream>
+#include <filesystem>
 
-/************* endPoint *************/
-HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(client)
+
+/************* Session *************/
+HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(client), m_resp(client)
 {
     m_owner = owner;
     m_recvBufSize = HTTP_DEFAULT_RECV_BUF_SIZE;

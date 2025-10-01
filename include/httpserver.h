@@ -4,43 +4,19 @@
 
 #pragma once
 
-#include "uv.h"
 #include <string>
 #include <cstring>
 #include <functional>
 #include <map>
 
+#include "uv.h"
 #include "http_parser.h"
-
-
+#include "leptjson.h"
+#include "../src/core/httpResp.h"
 
 #define HTTP_DEFAULT_PORT 8081
 #define HTTP_DEFAULT_KEEP_ALIVE_TIMEOUT 20
 #define HTTP_DEFAULT_RECV_BUF_SIZE 20
-
-enum class httpStatus
-{
-    OK = 200,
-    CREATED = 201,
-    ACCEPTED = 202,
-    NO_CONTENT = 204,
-    MOVED_PERMANENTLY = 301,
-    FOUND = 302,
-    NOT_MODIFIED = 304,
-    BAD_REQUEST = 400,
-    UNAUTHORIZED = 401,
-    FORBIDDEN = 403,
-    NOT_FOUND = 404,
-    INTERNAL_SERVER_ERROR = 500,
-    NOT_IMPLEMENTED = 501,
-    BAD_GATEWAY = 502,
-    SERVICE_UNAVAILABLE = 503,
-    GATEWAY_TIMEOUT = 504
-};
-
-std::string httpStatus_str(httpStatus status);
-
-using headerMap = std::map<std::string, std::string>;
 
 struct httpReq
 {
@@ -52,21 +28,6 @@ struct httpReq
     std::string version;
 
 };
-
-struct httpResp
-{
-    std::string url;
-    std::string body;
-    httpStatus status;
-    headerMap headers;
-
-    void writeHead(httpStatus status, const headerMap& headers);
-    void write(std::string data);
-    void setHeader(const std::string& name, const std::string& value);
-    void end(std::string data);
-
-};
-
 
 class HttpServer {
 public:
