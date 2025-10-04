@@ -2,10 +2,11 @@
 #include <assert.h> 
 #include <math.h> 
 #include <string> 
-#include <vector> 
+#include <utility>
+#include <vector>
 #include <errno.h> 
 #include <iostream> 
-#include "double-conversion/double-conversion.h"
+#include "double-conversion.h"
 using namespace double_conversion; 
 
 #define ISDIGIT(ch) ((ch) >= '0' && (ch) <= '9') 
@@ -64,7 +65,8 @@ int lept_context::parse_literal(lept_value* v, std::string literal, lept_type ty
 	switch (type) {
 		case lept_type::null: v->set_null(); break; 
 		case lept_type::lfalse: v->set_boolean(0); break; 
-		case lept_type::ltrue: v->set_boolean(1);  break; 
+		case lept_type::ltrue: v->set_boolean(1);  break;
+		default: break;
 	}
 	return LEPT_PARSE_OK;
 }
@@ -241,7 +243,7 @@ int lept_context::parse_object(lept_value* v) {
 	std::map<std::string, lept_value> mp; 
 	parse_whitespace(); 
 	if (json[ptr] == '}') {
-		v->set_object(mp); 
+		v->set_object(std::move(mp));
 		ptr++; 
 		return LEPT_PARSE_OK;
 	}
@@ -265,7 +267,7 @@ int lept_context::parse_object(lept_value* v) {
 		mp.insert(std::pair<std::string, lept_value>(str.get_string(), e)); 
 		parse_whitespace(); 
 		if (json[ptr] == '}') {
-			v->set_object(mp);
+			v->set_object(std::move(mp));
 			ptr++;
 			return LEPT_PARSE_OK;
 		}
@@ -294,6 +296,21 @@ int lept_context::parse_value(lept_value* v) {
 
 /**********************************  lept_value  **************************************/
 
+std::string lept_value::typeStr(lept_type t)
+{
+#define CASE_(x, s) case lept_type::x: return #s; break;
+		switch (t) {
+			CASE_(null, null)
+			CASE_(lfalse, false)
+			CASE_(ltrue, true)
+			CASE_(number, number)
+			CASE_(string, string)
+			CASE_(array, array)
+			CASE_(object, object)
+		}
+#undef CASE_(x, s)
+}
+
 int lept_value::parse(std::string json) {
 	lept_context c;
 	int ret;
@@ -321,8 +338,8 @@ lept_value::lept_value(const lept_value& val) {
 	switch (val.type) {
 		case lept_type::number: v.n = val.v.n; break;
 		case lept_type::string: new(&v.s) std::string(val.v.s); break;
-		case lept_type::array: new(&v.arr) std::vector<lept_value>(val.v.arr); break;
-		case lept_type::object: new(&v.obj) std::map<std::string, lept_value>(val.v.obj); break;
+		case lept_type::array: new(&v.arr) array_t(val.v.arr); break;
+		case lept_type::object: new(&v.obj) object_t(val.v.obj); break;
 		default: break;
 	}
 	type = val.type; 
@@ -379,16 +396,20 @@ const std::string& lept_value::get_string() {
 
 void lept_value::set_string(std::string str) {
 	this->free();
-	new(&v.s) std::string; 
-	type = lept_type::string; 
-	this->v.s; 
-	this->v.s = str; 
+	new(&v.s) std::string(std::move(str));
+	type = lept_type::string;
 }
 
 void lept_value::set_array(std::vector<lept_value>&& val) {
 	this->free(); 
 	type = lept_type::array; 
-	new(&v.arr) std::vector<lept_value>(val); 
+	new(&v.arr) std::vector<lept_value>(std::move(val));
+}
+
+void lept_value::set_array(const array_t& arr) {
+	this->free();
+	type = lept_type::array;
+	new(&v.arr) std::vector<lept_value>(arr);
 }
 
 size_t lept_value::get_array_size() {
@@ -416,13 +437,21 @@ lept_value lept_value::get_object_value(std::string key) {
 }
 
 size_t lept_value::get_object_size() {
-	return v.obj.size(); 
+	assert(type == lept_type::object);
+	return v.obj.size();
 }
 
-void lept_value::set_object(std::map<std::string, lept_value> mp) {
+void lept_value::set_object(std::map<std::string, lept_value>&& mp) {
 	this->free(); 
 	type = lept_type::object; 
-	new(&v.obj) std::map<std::string, lept_value>(mp); 
+	new(&v.obj) std::map<std::string, lept_value>(std::move(mp));
+}
+
+void lept_value::set_object(const std::map<std::string, lept_value>& mp) {
+	this->free();
+	type = lept_type::object;
+	// mp 是一个左值引用，这里只能调用拷贝构造函数
+	new(&v.obj) std::map<std::string, lept_value>(mp);
 }
 
 void lept_value::stringify_string(std::string& stk) { 
@@ -504,3 +533,54 @@ std::string lept_value::stringify() {
 	stringify_value(stk); 
 	return stk; 
 }
+
+lept_value::lept_value(std::string& s)
+{
+	this->type = lept_type::string;
+	new(&v.s) std::string(s);
+}
+lept_value::lept_value(double d)
+{
+	this->type = lept_type::number;
+	this->v.n = d;
+}
+lept_value::lept_value(std::vector<lept_value>&& arr)
+{
+	this->type = lept_type::array;
+	new(&v.arr) std::vector<lept_value>(arr);
+}
+lept_value::lept_value(std::map<std::string, lept_value>&& obj)
+{
+	this->type = lept_type::object;
+	new(&v.obj) std::map<std::string, lept_value>(obj);
+}
+lept_value::lept_value(bool b)
+{
+	this->type = b == 0 ? lept_type::lfalse : lept_type::ltrue;
+}
+
+lept_value::lept_value(std::nullptr_t) noexcept
+{
+	this->type = lept_type::null;
+}
+
+lept_value::lept_value(std::initializer_list<std::pair<std::string, lept_value>> initList)
+{
+	object_t obj;
+	for (const auto &it : initList)
+	{
+		obj.emplace(it.first, it.second);
+	}
+	this->set_object(std::move(obj));
+}
+
+// lept_value::lept_value(std::initializer_list<lept_value> initList)
+// {
+// 	array_t arr;
+// 	arr.reserve(initList.size());
+// 	for (const auto &it: initList)
+// 	{
+// 		arr.emplace_back(it);
+// 	}
+// 	this->set_array(std::move(arr));
+// }

@@ -58,7 +58,7 @@ int main() {
     ssize_t bytes_read;
     while ((bytes_read = read(client_fd, buffer, BUFFER_SIZE - 1)) > 0) {
         buffer[bytes_read] = '\0';
-        printf("%s", buffer);
+        printf("%s\n", buffer);
     }
 
     if (bytes_read < 0) {

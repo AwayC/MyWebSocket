@@ -26,6 +26,8 @@ HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(
     m_settings.on_body = onReqBody;
     m_settings.on_message_complete = onReqMessageComplete;
 
+    m_resp.setData(this);
+
     //keep alive
     m_isKeepAlive = false;
     uv_timer_init(owner->m_loop, &m_keepAliveTimer);
@@ -131,7 +133,7 @@ void HttpServer::Session::handle_request(char* data, size_t size, uv_stream_t* c
         {
             m_owner->handle_post(&m_req, &m_resp);
         }
-        m_owner->onRequestCb(&m_req, &m_resp);
+        onRequest();
 
         if (!needKeepConnection(&m_req))
         {
@@ -145,6 +147,30 @@ void HttpServer::Session::handle_request(char* data, size_t size, uv_stream_t* c
             startKeepAliveTimer();
         }
     }
+}
+
+void HttpServer::Session::onRequest()
+{
+    if (m_owner->onRequestCb)
+    {
+        m_owner->onRequestCb(&m_req, &m_resp);
+    }
+    m_resp.onCompleteAndSend([](httpResp* resp){
+        Session* ss = static_cast<Session*>(resp->getData());
+        assert(ss != nullptr);
+        if (ss->needKeepConnection(&ss->m_req))
+        {
+            //keep alive
+            std::cout << "keep alive connection" << std::endl;
+            ss->m_isKeepAlive = true;
+            ss->startKeepAliveTimer();
+        } else
+        {
+            std::cout << "close connection" << std::endl;
+            ss->closeTcp(ss->m_client);
+        }
+        resp->clearContent();
+    });
 }
 
 void HttpServer::Session::keepAliveTimerCb(uv_timer_t* timer)

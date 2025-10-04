@@ -10,6 +10,7 @@
 #include <map>
 #include "uv.h"
 #include "leptjson.h"
+#include <functional>
 
 #define DEFAULT_FILE_READER_BUFF_SIZE 1024
 
@@ -37,47 +38,55 @@ static std::string httpStatus_str(httpStatus status);
 
 using headerMap = std::map<std::string, std::string>;
 
-class FileReader;
-
-class FileClient
-{
-public:
-    virtual uv_loop_t* getLoop() = 0;
-    virtual void onOpen(FileReader* reader) = 0;
-    virtual void onRead(FileReader* reader) = 0;
-    virtual void onWrite(FileReader* reader) = 0;
-    virtual void onClose(FileReader* reader) = 0;
-
-    FileClient() = delete;
-    ~FileClient() = delete;
-};
 
 class FileReader
 {
-    uv_fs_t m_open_req;
-    uv_fs_t m_read_req;
-    uv_fs_t m_close_req;
-    std::vector<uv_buf_t> m_bufferVec;
-    int m_buffUsed;
-    FileClient *m_client;
-    int m_result;
-    std::string m_path;
-
-
+public:
     void fileRead(std::string path);
     int getResult()
     {
         return m_result;
     }
-    FileReader(FileClient *client);
-    ~FileReader()();
+
+    void onOpen(std::function<void(FileReader*)> cb);
+    void onClose(std::function<void(FileReader*)> cb);
+    void onRead(std::function<void(FileReader*)> cb);
+
+    size_t getBuff(uv_buf_t* buff);
+    size_t getReadByte();
+
+    void appendToBuff(std::vector<uv_buf_t>& buff);
+
+    void *data;
+    FileReader(uv_loop_t* loop);
+    ~FileReader();
+
+
 private:
+    uv_fs_t m_open_req;
+    uv_fs_t m_read_req;
+    uv_fs_t m_close_req;
+    std::vector<uv_buf_t> m_bufferVec;
+    int m_buffUsed;
+
+    int m_result;
+    int m_fd;
+    std::string m_path;
+    uv_loop_t* m_loop;
+    size_t m_readByte;
+
+
+    std::function<void(FileReader*)> m_onOpen;
+    std::function<void(FileReader*)> m_onRead;
+    std::function<void(FileReader*)> m_onClose;
+
     static void onOpen(uv_fs_t *req);
     static void onRead(uv_fs_t *req);
     static void onClose(uv_fs_t *req);
 };
 
-class httpResp : public FileClient {
+
+class httpResp {
 public:
     httpResp(uv_stream_t *client);
     ~httpResp();
@@ -88,10 +97,10 @@ public:
     void setHeader(const std::string& key, const std::string& value);
     void setStatus(httpStatus status);
 
-    void onOpen(FileReader* reader);
-    void onRead(FileReader* reader);
-    void onWrite(FileReader* reader);
-
+    void onCompleteAndSend(std::function<void(httpResp*)> cb);
+    void setData(void* data);
+    void* getData();
+    void clearContent();
 private:
     std::string m_body;
     httpStatus m_status;
@@ -100,11 +109,27 @@ private:
     int m_content_length;
     uv_stream_t *m_client;
     std::string m_url;
+    std::string m_filePath;
+    void* data;
 
+    std::function<void(httpResp*)> m_onComplete;
+    enum class SendType
+    {
+        NONE = 0,
+        STR = 1,
+        JSON = 2,
+        FILE = 3,
+    };
+
+    SendType m_sendType;
     FileReader m_reader;
+    std::string m_head;
 
-    void addToBuffer(char* data, size_t size);
-    void sendBuffer();
+    std::vector<uv_buf_t> m_buffers;
+
+    static void onWriteEnd(uv_write_t *req, int status);
+
+    void send();
 
 
 };

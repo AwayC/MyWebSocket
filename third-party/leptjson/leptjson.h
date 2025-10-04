@@ -1,63 +1,90 @@
-#pragma once 
+#pragma once
 
 #include <stddef.h>
-#include <string> 
-#include <vector> 
-#include <map> 
+#include <string>
+#include <vector>
+#include <map>
+#include <initializer_list>
 enum class lept_type { null, lfalse, ltrue, number, string, array, object };
 
 class lept_value;
 
+using object_t = std::map<std::string, lept_value>;
+using array_t = std::vector<lept_value>;
+
 class lept_value {
-private: 
+private:
 	union u{
 		double n;
 		std::string s;
-		std::vector<lept_value> arr;
-		std::map<std::string, lept_value> obj;
-		u() {}; 
-		~u() {}; 
+		array_t arr;
+		object_t obj;
+		u() {};
+		~u() {};
 	};
 	lept_type type;
-	u v; 
+	u v;
 
-	void free(); 
-	void stringify_value(std::string &stk); 
-	void stringify_string(std::string& stk); 
-public : 
+	void free();
+	void stringify_value(std::string &stk);
+	void stringify_string(std::string& stk);
+
+public :
 	lept_value() noexcept ;
-	lept_value(const lept_value& val); 
-	~lept_value() noexcept;
-	
-	int parse(std::string json);
-	
+	lept_value(const lept_value& val);
+	lept_value(std::string& s);
+	lept_value(double d);
+	lept_value(int i) : lept_value((double)i) {}
+	lept_value(std::vector<lept_value>&& arr);
+	lept_value(std::map<std::string, lept_value>&& obj);
+	lept_value(bool b);
+	lept_value(std::nullptr_t) noexcept;
 
-	void set_null(); 
+	lept_value(std::initializer_list<std::pair<std::string, lept_value>> initList);
+	// lept_value(std::initializer_list<lept_value> initList);
+
+	~lept_value() noexcept;
+
+	int parse(std::string json);
+
+	static std::string typeStr(lept_type t);
+
+	void set_null();
 
 	lept_type get_type() {
 		return type;
 	};
 
-	bool get_boolean(); 
+	bool get_boolean();
 	void set_boolean(int b);
+	void set_boolean(bool b)
+	{
+		set_boolean(b ? 1 : 0);
+	}
 
-	double get_number(); 
+	double get_number();
 	void set_number(double num);
+	void set_number(int num)
+	{
+		set_number((double)num);
+	}
 
 	const std::string& get_string();
 	void set_string(std::string);
 
 	size_t get_array_size();
 	lept_value& get_array_element(size_t index);
-	const lept_value& get_element(size_t index); 
+	const lept_value& get_element(size_t index);
 	void set_array(std::vector<lept_value>&& val);
+	void set_array(const array_t& arr);
 
 	bool contains_key(std::string key);
-	lept_value get_object_value(std::string key); 
-	size_t get_object_size(); 
-	void set_object(const std::map<std::string, lept_value> mp); 
+	lept_value get_object_value(std::string key);
+	size_t get_object_size();
+	void set_object(object_t&& obj);
+	void set_object(const std::map<std::string, lept_value>& mp);
 
-	std::string stringify(); 
+	std::string stringify();
 };
 
 enum  {
@@ -73,6 +100,6 @@ enum  {
 	LEPT_PARSE_INVALID_UNICODE_SURROGATE,
 	LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET,
 	LEPT_PARSE_MISS_KEY,
-	LEPT_PARSE_MISS_COLON, 
+	LEPT_PARSE_MISS_COLON,
 	LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET
 };

@@ -93,6 +93,8 @@ private:
         void handle_request(char* data, size_t size, uv_stream_t* client);
         void startKeepAliveTimer();
         void stopKeepAliveTimer();
+        void onRequest();
+        static void onRequestComplete(httpReq* req);
         static void keepAliveTimerCb(uv_timer_t* timer);
     };
 
