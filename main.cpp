@@ -6,7 +6,7 @@
 #include <string>
 #include <iostream>
 #include "leptjson.h"
-#include "third-party/leptjson/leptjson.h"
+#include "leptjson.h"
 
 
 int main() {
@@ -16,7 +16,7 @@ int main() {
     {
         std::cout << "onConnect" << std::endl;
     });
-    svr.onRequest([](httpReq* req, httpResp* resp)
+    svr.get("/", [](httpReq* req, httpResp* resp)
     {
         static int cnt = 0;
         std::cout << "onRequest" << std::endl;

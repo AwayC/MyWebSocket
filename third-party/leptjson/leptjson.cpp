@@ -534,11 +534,18 @@ std::string lept_value::stringify() {
 	return stk; 
 }
 
-lept_value::lept_value(std::string& s)
+lept_value::lept_value(const std::string& s)
 {
 	this->type = lept_type::string;
 	new(&v.s) std::string(s);
 }
+
+lept_value::lept_value(std::string&& s)
+{
+	this->type = lept_type::string;
+	new(&v.s) std::string(std::move(s));
+}
+
 lept_value::lept_value(double d)
 {
 	this->type = lept_type::number;
@@ -554,33 +561,33 @@ lept_value::lept_value(std::map<std::string, lept_value>&& obj)
 	this->type = lept_type::object;
 	new(&v.obj) std::map<std::string, lept_value>(obj);
 }
-lept_value::lept_value(bool b)
-{
-	this->type = b == 0 ? lept_type::lfalse : lept_type::ltrue;
-}
+
 
 lept_value::lept_value(std::nullptr_t) noexcept
 {
 	this->type = lept_type::null;
 }
 
-lept_value::lept_value(std::initializer_list<std::pair<std::string, lept_value>> initList)
-{
-	object_t obj;
-	for (const auto &it : initList)
-	{
-		obj.emplace(it.first, it.second);
-	}
-	this->set_object(std::move(obj));
-}
 
-// lept_value::lept_value(std::initializer_list<lept_value> initList)
-// {
-// 	array_t arr;
-// 	arr.reserve(initList.size());
-// 	for (const auto &it: initList)
-// 	{
-// 		arr.emplace_back(it);
-// 	}
-// 	this->set_array(std::move(arr));
-// }
+lept_value::lept_value(std::initializer_list<lept_value> initList)
+{
+	bool is_an_object = std::all_of(initList.begin(), initList.end(),
+		[](const lept_value& ele)
+		{
+			return ele.type == lept_type::array && ele.v.arr.size() == 2
+				&& ele.v.arr[0].type == lept_type::string;
+		});
+	if (is_an_object)
+	{
+		object_t obj;
+		for (auto &it : initList)
+		{
+			obj.emplace(it.v.arr[0].v.s, it.v.arr[1]);
+		}
+
+		this->set_object(std::move(obj));
+	} else
+	{
+		this->set_array(array_t(initList));
+	}
+}

@@ -5,7 +5,7 @@
 #include "httpResp.h"
 
 #include <cassert>
-
+#include "httpserver.h"
 
 std::string httpStatus_str(httpStatus status)
 {
@@ -37,18 +37,26 @@ std::string httpStatus_str(httpStatus status)
 }
 
 /********** httpResp *********/
-httpResp::httpResp(uv_stream_t* client) : m_client(client), m_reader(client->loop)
+template httpResp::httpResp(std::shared_ptr<HttpServer::Session> ctx);
+
+template<typename T>
+httpResp::httpResp(std::shared_ptr<T> ctx) : m_reader(ctx->getLoop())
 {
     m_status = httpStatus::OK;
     m_sendType = SendType::NONE;
-    m_reader.data = this;
+    m_client = ctx->getClient();
+
+}
+
+void httpResp::init()
+{
     m_reader.onOpen([](FileReader* reader)
-    {
-        if (reader->getResult() < 0)
-        {
-            std::cerr << "send file error" << std::endl;
-        }
-    });
+   {
+       if (reader->getResult() < 0)
+       {
+           std::cerr << "send file error" << std::endl;
+       }
+   });
     m_reader.onRead([](FileReader* reader)
     {
         if (reader->getResult() < 0)
@@ -56,22 +64,22 @@ httpResp::httpResp(uv_stream_t* client) : m_client(client), m_reader(client->loo
             std::cerr << "send file error" << std::endl;
         }
     });
-    m_reader.onClose([](FileReader* reader)
+    auto self = this->shared_from_this();
+    m_reader.onClose([self](FileReader* reader)
     {
         if (reader->getResult() < 0)
         {
             std::cerr << "send file error" << std::endl;
         }
 
-        httpResp* resp = static_cast<httpResp*>(reader->data);
-        resp->send();
+        self->send();
     });
 }
 
 httpResp::~httpResp()
 {
 
-
+    std::cout << "httpResp::~httpResp()" << std::endl;
 }
 
 void httpResp::sendFile(const std::string& path)
@@ -123,7 +131,6 @@ void httpResp::send()
     m_buffers.push_back(uv_buf_init(const_cast<char*>(m_head.c_str()), m_head.size()));
 
     auto req = new uv_write_t;
-    req->data = this;
 
     if (SendType::FILE == m_sendType)
     {
@@ -133,10 +140,16 @@ void httpResp::send()
         m_buffers.push_back(uv_buf_init(const_cast<char*>(m_body.c_str()), m_body.size()));
     }
 
-    uv_write(req, m_client,
-            m_buffers.data(),
-            m_buffers.size(),
-            onWriteEnd);
+    req->data = this;
+
+    auto ctx = new WriteContext();
+    ctx->req.data = ctx;
+    ctx->resp = this->shared_from_this();
+
+    uv_write(&ctx->req, m_client,
+             m_buffers.data(),
+             m_buffers.size(),
+             onWriteEnd);
 }
 
 void httpResp::onWriteEnd(uv_write_t *req, int status)
@@ -149,29 +162,24 @@ void httpResp::onWriteEnd(uv_write_t *req, int status)
         std::cout << "write success" << std::endl;
     }
 
-    httpResp* resp = static_cast<httpResp*>(req->data);
-    if (resp->m_onComplete)
-        resp->m_onComplete(resp);
+    auto ctx = static_cast<WriteContext*>(req->data);
+    if (ctx->resp->m_onComplete)
+    {
+        ctx->resp->m_onComplete(ctx->resp.get());
+        ctx->resp->m_onComplete = nullptr;
+    }
+
+    delete ctx;
 }
 
-void httpResp::onCompleteAndSend(std::function<void(httpResp*)> cb)
+void httpResp::onCompleteAndSend(const std::function<void(httpResp*)>&& cb)
 {
-    m_onComplete = cb;
+    m_onComplete = std::move(cb);
 
     if (SendType::FILE == m_sendType)
         m_reader.fileRead(m_filePath);
     else
         send();
-}
-
-void httpResp::setData(void* data)
-{
-    this->data = data;
-}
-
-void* httpResp::getData()
-{
-    return data;
 }
 
 void httpResp::clearContent()
@@ -183,163 +191,3 @@ void httpResp::clearContent()
     m_filePath.clear();
 }
 
-/********* FileReader *********/
-
-size_t FileReader::getBuff(uv_buf_t* buff)
-{
-    buff = m_bufferVec.data();
-    return m_buffUsed;
-}
-
-size_t FileReader::getReadByte()
-{
-    return m_readByte;
-}
-
-void FileReader::appendToBuff(std::vector<uv_buf_t>& buff)
-{
-    for (size_t i = 0;i < m_buffUsed;i ++)
-    {
-        buff.push_back(m_bufferVec[i]);
-    }
-}
-
-FileReader::FileReader(uv_loop_t* loop) : m_loop(loop)
-{
-    m_bufferVec.push_back(uv_buf_init(new char[DEFAULT_FILE_READER_BUFF_SIZE],
-        DEFAULT_FILE_READER_BUFF_SIZE));
-    m_buffUsed = 0;
-    m_readByte = 0;
-    data = nullptr;
-}
-
-FileReader::~FileReader()
-{
-    for (auto &buf: m_bufferVec)
-    {
-        delete [] buf.base;
-    }
-
-    m_bufferVec.clear();
-}
-
-
-void FileReader::fileRead(std::string path)
-{
-    m_open_req.data = this;
-    m_read_req.data = this;
-    m_close_req.data = this;
-
-    m_path = std::move(path);
-    m_buffUsed = 0;
-    m_readByte = 0;
-
-    uv_fs_open(m_loop,
-                &m_open_req,
-                m_path.c_str(),
-                O_RDONLY, 0, onOpen);
-}
-
-void FileReader::onOpen(uv_fs_t* req)
-{
-    FileReader* self = static_cast<FileReader*>(req->data);
-    assert(self != nullptr);
-    self->m_result = req->result;
-
-    if (self->m_onOpen)
-        self->m_onOpen(self);
-
-    if (req->result < 0)
-    {
-        std::cerr << "open file failed" << std::endl;
-    } else
-    {
-        std::cout << "file open success" << std::endl;
-        if (self->m_bufferVec.size() == 0)
-        {
-            self->m_bufferVec.push_back(uv_buf_t(new char[DEFAULT_FILE_READER_BUFF_SIZE],
-                DEFAULT_FILE_READER_BUFF_SIZE));
-        }
-        self->m_buffUsed = 0;
-        self->m_fd = req->result;
-        uv_fs_read(self->m_loop,
-                    &self->m_read_req,
-                    self->m_fd, self->m_bufferVec.data(),
-                    1, -1,
-                    FileReader::onRead);
-    }
-
-    uv_fs_req_cleanup(req);
-}
-
-void FileReader::onClose(uv_fs_t* req)
-{
-    std::cerr << "file close success" << std::endl;
-    uv_fs_req_cleanup(req);
-    FileReader* self = static_cast<FileReader*>(req->data);
-    assert(self != nullptr);
-    uv_fs_req_cleanup(&self->m_read_req);
-    if (self->m_onClose)
-        self->m_onClose(self);
-}
-
-void FileReader::onRead(uv_fs_t* req)
-{
-    FileReader* self = static_cast<FileReader*>(req->data);
-    assert(self != nullptr);
-    self->m_result = req->result;
-    if (req->result < 0)
-    {
-        std::cerr << "read file fail" << std::endl;
-        uv_fs_req_cleanup(req);
-        uv_fs_req_cleanup(&self->m_close_req);
-        uv_fs_req_cleanup(&self->m_read_req);
-
-        if (self->m_onRead)
-            self->m_onRead(self);
-    } else
-    {
-        if (req->result == 0)
-        {
-            std::cout << "file read end" << std::endl;
-            if (self->m_onRead)
-                self->m_onRead(self);
-
-            uv_fs_close(self->m_loop,
-                        &self->m_read_req,
-                        req->result,
-                        FileReader::onClose);
-            uv_fs_req_cleanup(req);
-        } else
-        {
-            std::cout << "file read " << req->result << " bytes" << std::endl;
-            self->m_buffUsed ++;
-            self->m_readByte += req->result;
-            if (self->m_buffUsed == self->m_bufferVec.size())
-            {
-                self->m_bufferVec.push_back(uv_buf_t(new char[DEFAULT_FILE_READER_BUFF_SIZE],
-                    DEFAULT_FILE_READER_BUFF_SIZE));
-            }
-            uv_fs_read(self->m_loop,
-                        &self->m_read_req,
-                        self->m_fd, self->m_bufferVec.data() + self->m_buffUsed,
-                        1, -1,
-                        FileReader::onRead);
-        }
-    }
-}
-
-void FileReader::onOpen(std::function<void(FileReader*)> cb)
-{
-        m_onOpen = cb;
-}
-
-void FileReader::onClose(std::function<void(FileReader*)> cb)
-{
-        m_onClose = cb;
-}
-
-void FileReader::onRead(std::function<void(FileReader*)> cb)
-{
-        m_onRead = cb;
-}

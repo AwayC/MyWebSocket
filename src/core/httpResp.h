@@ -11,8 +11,9 @@
 #include "uv.h"
 #include "leptjson.h"
 #include <functional>
+#include "FileReader.h"
 
-#define DEFAULT_FILE_READER_BUFF_SIZE 1024
+
 
 enum class httpStatus
 {
@@ -39,57 +40,19 @@ static std::string httpStatus_str(httpStatus status);
 using headerMap = std::map<std::string, std::string>;
 
 
-class FileReader
-{
+class httpResp : public std::enable_shared_from_this<httpResp> {
 public:
-    void fileRead(std::string path);
-    int getResult()
+    template<typename T>
+    httpResp(std::shared_ptr<T> ctx);
+    ~httpResp();
+
+    template<typename T>
+    static std::shared_ptr<httpResp> create(std::shared_ptr<T> ctx)
     {
-        return m_result;
+        return std::make_shared<httpResp>(ctx);
     }
 
-    void onOpen(std::function<void(FileReader*)> cb);
-    void onClose(std::function<void(FileReader*)> cb);
-    void onRead(std::function<void(FileReader*)> cb);
-
-    size_t getBuff(uv_buf_t* buff);
-    size_t getReadByte();
-
-    void appendToBuff(std::vector<uv_buf_t>& buff);
-
-    void *data;
-    FileReader(uv_loop_t* loop);
-    ~FileReader();
-
-
-private:
-    uv_fs_t m_open_req;
-    uv_fs_t m_read_req;
-    uv_fs_t m_close_req;
-    std::vector<uv_buf_t> m_bufferVec;
-    int m_buffUsed;
-
-    int m_result;
-    int m_fd;
-    std::string m_path;
-    uv_loop_t* m_loop;
-    size_t m_readByte;
-
-
-    std::function<void(FileReader*)> m_onOpen;
-    std::function<void(FileReader*)> m_onRead;
-    std::function<void(FileReader*)> m_onClose;
-
-    static void onOpen(uv_fs_t *req);
-    static void onRead(uv_fs_t *req);
-    static void onClose(uv_fs_t *req);
-};
-
-
-class httpResp {
-public:
-    httpResp(uv_stream_t *client);
-    ~httpResp();
+    void init();
     void sendStr(const std::string& str);
     void sendJson(lept_value& json);
     void sendFile(const std::string& path);
@@ -97,11 +60,21 @@ public:
     void setHeader(const std::string& key, const std::string& value);
     void setStatus(httpStatus status);
 
-    void onCompleteAndSend(std::function<void(httpResp*)> cb);
-    void setData(void* data);
-    void* getData();
+    void onCompleteAndSend(const std::function<void(httpResp*)>&& cb);
+    void onCompleteAndSend(const std::function<void(httpResp*)>& cb)
+    {
+        onCompleteAndSend(std::move(cb));
+    }
     void clearContent();
 private:
+
+    class WriteContext
+    {
+    public:
+        uv_write_t req;
+        std::shared_ptr<httpResp> resp;
+    };
+
     std::string m_body;
     httpStatus m_status;
     headerMap m_headers;
@@ -110,7 +83,6 @@ private:
     uv_stream_t *m_client;
     std::string m_url;
     std::string m_filePath;
-    void* data;
 
     std::function<void(httpResp*)> m_onComplete;
     enum class SendType

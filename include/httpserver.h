@@ -35,24 +35,12 @@ public:
     ~HttpServer();
 
     void start();
-    void post(const std::string& url, std::function<void(httpReq*, httpResp*)>& callback);
-    void get(const std::string& url, std::function<void(httpReq*, httpResp* )>& callback);
+    void post(const std::string& url, const std::function<void(httpReq*, httpResp*)>& callback);
+    void get(const std::string& url, const std::function<void(httpReq*, httpResp* )>& callback);
     void onRequest(const std::function<void(httpReq*, httpResp*)>& callback);
     void onConnect(const std::function<void(uv_tcp_t* client)>& callback);
     void setKeepAliveTimeout(int timeout);
-
-private:
-    uv_loop_t *m_loop;
-    uv_tcp_t *m_tcp_svr;
-    std::string m_ip;
-    int m_port;
-
-    int m_keepAliveTimeout;
-
-    std::function<void(uv_tcp_t* client)> onConnectCb;
-    std::function<void(httpReq*, httpResp*)> onRequestCb;
-
-    struct Session
+    struct Session : public std::enable_shared_from_this<Session>
     {
         uv_stream_t *m_client;
         http_parser m_parser;
@@ -60,7 +48,7 @@ private:
 
         std::string m_tmpKey;
         httpReq m_req;
-        httpResp m_resp;
+        std::shared_ptr<httpResp> m_resp;
         HttpServer* m_owner;
 
         char* m_recvBuf;
@@ -71,6 +59,11 @@ private:
 
         Session(uv_stream_t *client, HttpServer* owner);
         ~Session();
+
+        static std::shared_ptr<Session> create(uv_stream_t *client, HttpServer* owner)
+        {
+            return std::make_shared<Session>(client, owner);
+        }
         static void recv_alloc_cb(uv_handle_t* handle,
                             size_t suggested_size,
                             uv_buf_t* buf);
@@ -88,15 +81,40 @@ private:
         static int onReqBody(http_parser* parser, const char* at, size_t length);
 
         static bool needKeepConnection (httpReq* req);
-        static void closeTcp(uv_stream_t* client);
+        void close();
 
+        void init();
         void handle_request(char* data, size_t size, uv_stream_t* client);
         void startKeepAliveTimer();
         void stopKeepAliveTimer();
         void onRequest();
+
+        uv_loop_t* getLoop() const
+        {
+            return m_owner->m_loop;
+        }
+        uv_stream_t* getClient() const
+        {
+            return m_client;
+        }
+
         static void onRequestComplete(httpReq* req);
         static void keepAliveTimerCb(uv_timer_t* timer);
     };
+
+private:
+    uv_loop_t *m_loop;
+    uv_tcp_t *m_tcp_svr;
+    std::string m_ip;
+    int m_port;
+
+    int m_keepAliveTimeout;
+
+    mutable std::mutex m_mutex;
+    std::vector<std::shared_ptr<Session>> m_sessions;
+
+    std::function<void(uv_tcp_t* client)> onConnectCb;
+    std::function<void(httpReq*, httpResp*)> onRequestCb;
 
     std::unordered_map<std::string, std::function<void(httpReq*, httpResp*)>> post_callbacks;
     std::unordered_map<std::string, std::function<void(httpReq*, httpResp*)>> get_callbacks;
@@ -106,7 +124,14 @@ private:
     void handle_connect(uv_stream_t *client);
     void handle_post(httpReq* req, httpResp* resp);
     void handle_get(httpReq* req, httpResp* resp);
-
+    size_t getSessionCount() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_sessions.size();
+    }
+    void handle_errReq(httpReq* req, httpResp* resp);
+    void closeSession(std::shared_ptr<Session> &session);
+    void removeSession(std::shared_ptr<Session> &session);
 };
 
 

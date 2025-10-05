@@ -14,6 +14,7 @@ add_subdirectory(third-party/leptjson)
 add_library(websocket
     src/core/httpserver.cpp
     src/core/httpResp.cpp
+    src/core/FileReader.cpp
 )
 
 target_link_libraries(websocket PUBLIC

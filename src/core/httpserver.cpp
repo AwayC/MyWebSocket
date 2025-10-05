@@ -12,8 +12,9 @@
 
 
 /************* Session *************/
-HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(client), m_resp(client)
+HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(client)
 {
+    m_resp = nullptr;
     m_owner = owner;
     m_recvBufSize = HTTP_DEFAULT_RECV_BUF_SIZE;
     m_recvBuf = new char[m_recvBufSize];
@@ -26,7 +27,6 @@ HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(
     m_settings.on_body = onReqBody;
     m_settings.on_message_complete = onReqMessageComplete;
 
-    m_resp.setData(this);
 
     //keep alive
     m_isKeepAlive = false;
@@ -40,7 +40,14 @@ HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(
 HttpServer::Session::~Session()
 {
     delete[] m_recvBuf;
+    std::cout << "session destroyed" << std::endl;
 };
+
+void HttpServer::Session::init()
+{
+    m_resp = httpResp::create(shared_from_this());
+    m_resp->init();
+}
 
 bool HttpServer::Session::needKeepConnection (httpReq* req)
 {
@@ -55,14 +62,10 @@ bool HttpServer::Session::needKeepConnection (httpReq* req)
     return ret;
 }
 
-void HttpServer::Session::closeTcp(uv_stream_t* client)
+void HttpServer::Session::close()
 {
-    uv_read_stop(client);
-    uv_close((uv_handle_t*)client, [](uv_handle_t* client){
-        Session* self = static_cast<Session*>(client->data);
-        delete self;
-        delete client;
-    });
+    auto self = shared_from_this();
+    m_owner->closeSession(self);
 }
 
 void HttpServer::Session::recv_alloc_cb(uv_handle_t* handle,
@@ -99,7 +102,7 @@ void HttpServer::Session::recv_cb(uv_stream_t* client,
             std::cout << "Connection closed by peer" << std::endl;
         }
         ep->stopKeepAliveTimer();
-        closeTcp(client);
+        ep->close();
         return;
     }
 
@@ -128,59 +131,54 @@ void HttpServer::Session::handle_request(char* data, size_t size, uv_stream_t* c
     {
         if (m_req.method == HTTP_GET)
         {
-            m_owner->handle_get(&m_req, &m_resp);
+            m_owner->handle_get(&m_req, m_resp.get());
         } else if (m_req.method == HTTP_POST)
         {
-            m_owner->handle_post(&m_req, &m_resp);
-        }
-        onRequest();
-
-        if (!needKeepConnection(&m_req))
-        {
-            std::cout << "close connection" << std::endl;
-            closeTcp(client);
+            m_owner->handle_post(&m_req, m_resp.get());
         } else
         {
-            //keep alive
-            std::cout << "keep alive connection" << std::endl;
-            m_isKeepAlive = true;
-            startKeepAliveTimer();
+            if (m_owner->onRequestCb)
+                m_owner->onRequestCb(&m_req, m_resp.get());
+            else
+                m_owner->handle_errReq(&m_req, m_resp.get());
         }
+        onRequest();
     }
 }
 
 void HttpServer::Session::onRequest()
 {
-    if (m_owner->onRequestCb)
-    {
-        m_owner->onRequestCb(&m_req, &m_resp);
-    }
-    m_resp.onCompleteAndSend([](httpResp* resp){
-        Session* ss = static_cast<Session*>(resp->getData());
-        assert(ss != nullptr);
-        if (ss->needKeepConnection(&ss->m_req))
+    std::shared_ptr<Session> self = shared_from_this( );
+    std::cout << "on request" << std::endl;
+    std::cout << "session use count: " << self.use_count() << std::endl;
+    m_resp->onCompleteAndSend([self](httpResp* resp){
+        assert(self != nullptr);
+        if (needKeepConnection(&self->m_req))
         {
             //keep alive
             std::cout << "keep alive connection" << std::endl;
-            ss->m_isKeepAlive = true;
-            ss->startKeepAliveTimer();
+            self->m_isKeepAlive = true;
+            self->startKeepAliveTimer();
         } else
         {
             std::cout << "close connection" << std::endl;
-            ss->closeTcp(ss->m_client);
+            self->close();
         }
         resp->clearContent();
     });
+    std::cout << "session use count after send: " << self.use_count() << std::endl;
 }
 
 void HttpServer::Session::keepAliveTimerCb(uv_timer_t* timer)
 {
     Session* ep = (Session*)timer->data;
-    closeTcp(ep->m_client);
+    if (ep != nullptr)
+        ep->close();
 }
 
 void HttpServer::Session::startKeepAliveTimer()
 {
+    m_keepAliveTimer.data = this;
     uv_timer_start(&m_keepAliveTimer, keepAliveTimerCb, m_owner->m_keepAliveTimeout * 1000, 0);
     m_isKeepAlive = true;
 }
@@ -188,6 +186,7 @@ void HttpServer::Session::startKeepAliveTimer()
 void HttpServer::Session::stopKeepAliveTimer()
 {
     m_isKeepAlive = false;
+    m_keepAliveTimer.data = nullptr;
     uv_timer_stop(&m_keepAliveTimer);
 }
 
@@ -248,12 +247,19 @@ int HttpServer::Session::onReqBody(http_parser* parser, const char* at, size_t l
 }
 
 /************* HttpServer *************/
-
 void HttpServer::handle_connect(uv_stream_t* client)
 {
-    Session* ep = new Session(client, this);
+    auto ss = Session::create(client, this);
+    ss->init();
+
     std::cout << "handle request" << std::endl;
-    client->data = ep;
+    client->data = ss.get();
+    std::cout << "session use count: " << ss.use_count() << std::endl;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_sessions.push_back(ss);
+    }
+    std::cout << "session use count: " << ss.use_count() << std::endl;
     uv_read_start(client, Session::recv_alloc_cb, Session::recv_cb);
 }
 
@@ -337,12 +343,12 @@ void HttpServer::inter_on_connect(uv_stream_t *server, int status)
     }
 }
 
-void HttpServer::post(const std::string& url, std::function<void(httpReq*, httpResp*)>& callback)
+void HttpServer::post(const std::string& url, const std::function<void(httpReq*, httpResp*)>& callback)
 {
     post_callbacks.insert(std::make_pair(url, callback));
 }
 
-void HttpServer::get(const std::string& url, std::function<void(httpReq*, httpResp*)>& callback)
+void HttpServer::get(const std::string& url, const std::function<void(httpReq*, httpResp*)>& callback)
 {
     get_callbacks.insert(std::make_pair(url, callback));
 }
@@ -353,6 +359,9 @@ void HttpServer::handle_post(httpReq* req, httpResp* resp)
     if (it != post_callbacks.end())
     {
         it->second(req, resp);
+    } else
+    {
+        handle_errReq(req, resp);
     }
 }
 
@@ -362,8 +371,18 @@ void HttpServer::handle_get(httpReq* req, httpResp* resp)
     if (it != get_callbacks.end())
     {
         it->second(req, resp);
+    } else
+    {
+        handle_errReq(req, resp);
     }
 }
+
+void HttpServer::handle_errReq(httpReq* req, httpResp* resp)
+{
+    resp->setStatus(httpStatus::NOT_FOUND);
+    resp->sendStr("404 Not Found");
+}
+
 
 void HttpServer::onConnect(const std::function<void(uv_tcp_t* client)>& callback)
 {
@@ -378,4 +397,33 @@ void HttpServer::onRequest(const std::function<void(httpReq*, httpResp*)>& callb
 void HttpServer::setKeepAliveTimeout(int timeout)
 {
     m_keepAliveTimeout = timeout;
+}
+
+void HttpServer::closeSession(std::shared_ptr<Session> &session)
+{
+    uv_read_stop(session->m_client);
+    uv_stream_t* client = session->m_client;
+    uv_close((uv_handle_t*)client, [](uv_handle_t* client){
+        delete client;
+    });
+    std::cout << "session use count: " << session.use_count() << std::endl;
+    removeSession(session);
+    std::cout << "session use count: " << session.use_count() << std::endl;
+    std::cout << "close session" << std::endl;
+
+}
+
+void HttpServer::removeSession(std::shared_ptr<Session> &session)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto it = std::find(m_sessions.begin(), m_sessions.end(), session);
+
+    if (it != m_sessions.end()) {
+        // 2. 与最后一个元素交换
+        // std::iter_swap 比 *it = std::move(sessions.back()) 更通用
+        std::iter_swap(it, m_sessions.end() - 1);
+
+        // 3. 弹出最后一个元素
+        m_sessions.pop_back();
+    }
 }
