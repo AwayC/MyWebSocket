@@ -14,6 +14,7 @@
 #include "FileReader.h"
 
 
+class httpResp;
 
 enum class httpStatus
 {
@@ -38,21 +39,28 @@ enum class httpStatus
 static std::string httpStatus_str(httpStatus status);
 
 using headerMap = std::map<std::string, std::string>;
-
+using httpRespPtr = std::shared_ptr<httpResp>;
 
 class httpResp : public std::enable_shared_from_this<httpResp> {
 public:
     template<typename T>
     httpResp(std::shared_ptr<T> ctx);
     ~httpResp();
-
+public:
+    /*
+     * 工厂模式
+     */
     template<typename T>
-    static std::shared_ptr<httpResp> create(std::shared_ptr<T> ctx)
+    static httpRespPtr create(std::shared_ptr<T> ctx)
     {
         return std::make_shared<httpResp>(ctx);
     }
 
     void init();
+
+    /*
+     * 用户发送方法
+     */
     void sendStr(const std::string& str);
     void sendJson(lept_value& json);
     void sendFile(const std::string& path);
@@ -60,6 +68,9 @@ public:
     void setHeader(const std::string& key, const std::string& value);
     void setStatus(httpStatus status);
 
+    /*
+     * 完成回调，发送请求
+     */
     void onCompleteAndSend(const std::function<void(httpResp*)>&& cb);
     void onCompleteAndSend(const std::function<void(httpResp*)>& cb)
     {
@@ -67,12 +78,14 @@ public:
     }
     void clearContent();
 private:
-
+    /*
+     * 写入上下文
+     */
     class WriteContext
     {
     public:
         uv_write_t req;
-        std::shared_ptr<httpResp> resp;
+        httpRespPtr resp;
     };
 
     std::string m_body;
@@ -99,8 +112,14 @@ private:
 
     std::vector<uv_buf_t> m_buffers;
 
+    /*
+     * 写入完成回调
+     */
     static void onWriteEnd(uv_write_t *req, int status);
 
+    /*
+     * 内部发送请求
+     */
     void send();
 
 

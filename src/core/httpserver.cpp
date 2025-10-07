@@ -62,10 +62,10 @@ bool HttpServer::Session::needKeepConnection (httpReq* req)
     return ret;
 }
 
-void HttpServer::Session::close()
+void HttpServer::Session::close(bool isUpgrade)
 {
     auto self = shared_from_this();
-    m_owner->closeSession(self);
+    m_owner->closeSession(self, isUpgrade);
 }
 
 void HttpServer::Session::recv_alloc_cb(uv_handle_t* handle,
@@ -123,6 +123,7 @@ void HttpServer::Session::handle_request(char* data, size_t size, uv_stream_t* c
     if (m_parser.upgrade)
     {
         //todo: upgrade to websocket
+        upgradeToWs();
 
     } else if (nparsed != size)
     {
@@ -148,7 +149,7 @@ void HttpServer::Session::handle_request(char* data, size_t size, uv_stream_t* c
 
 void HttpServer::Session::onRequest()
 {
-    std::shared_ptr<Session> self = shared_from_this( );
+    auto self = shared_from_this( );
     std::cout << "on request" << std::endl;
     std::cout << "session use count: " << self.use_count() << std::endl;
     m_resp->onCompleteAndSend([self](httpResp* resp){
@@ -244,6 +245,20 @@ int HttpServer::Session::onReqBody(http_parser* parser, const char* at, size_t l
     assert(ep != nullptr);
     ep->m_req.body.append(at, length);
     return 0;
+}
+
+void HttpServer::Session::upgradeToWs()
+{
+    if (m_owner->onUpgradeCb)
+        m_owner->onUpgradeCb(shared_from_this());
+    else
+    {
+        std::cerr << "upgradeToWs: onUpgradeCb is not set" << std::endl;
+        close(false);
+        return ;
+    }
+
+    close(true);
 }
 
 /************* HttpServer *************/
@@ -399,13 +414,18 @@ void HttpServer::setKeepAliveTimeout(int timeout)
     m_keepAliveTimeout = timeout;
 }
 
-void HttpServer::closeSession(std::shared_ptr<Session> &session)
+void HttpServer::closeSession(SessionPtr &session, bool isUpgrade)
 {
     uv_read_stop(session->m_client);
-    uv_stream_t* client = session->m_client;
-    uv_close((uv_handle_t*)client, [](uv_handle_t* client){
-        delete client;
-    });
+
+    if (!isUpgrade)
+    {
+        uv_stream_t* client = session->m_client;
+        uv_close((uv_handle_t*)client, [](uv_handle_t* client){
+            delete client;
+        });
+    }
+
     std::cout << "session use count: " << session.use_count() << std::endl;
     removeSession(session);
     std::cout << "session use count: " << session.use_count() << std::endl;
@@ -413,7 +433,7 @@ void HttpServer::closeSession(std::shared_ptr<Session> &session)
 
 }
 
-void HttpServer::removeSession(std::shared_ptr<Session> &session)
+void HttpServer::removeSession(SessionPtr &session)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     auto it = std::find(m_sessions.begin(), m_sessions.end(), session);
@@ -427,3 +447,8 @@ void HttpServer::removeSession(std::shared_ptr<Session> &session)
         m_sessions.pop_back();
     }
 }
+
+void HttpServer::onUpgrade(const std::function<void(std::shared_ptr<Session>)>& callback) {
+    onUpgradeCb = callback;
+}
+

@@ -15,6 +15,8 @@ add_library(websocket
     src/core/httpserver.cpp
     src/core/httpResp.cpp
     src/core/FileReader.cpp
+    src/core/WebSocket.cpp
+    src/core/WsServer.cpp
 )
 
 target_link_libraries(websocket PUBLIC

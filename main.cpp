@@ -10,13 +10,13 @@
 
 
 int main() {
-    HttpServer svr("127.0.0.1");
+    auto svr = HttpServer::create("127.0.0.1");
     std::cout << "create http server" << std::endl;
-    svr.onConnect([](uv_tcp_t* client)
+    svr->onConnect([](uv_tcp_t* client)
     {
         std::cout << "onConnect" << std::endl;
     });
-    svr.get("/", [](httpReq* req, httpResp* resp)
+    svr->get("/", [](httpReq* req, httpResp* resp)
     {
         static int cnt = 0;
         std::cout << "onRequest" << std::endl;
@@ -50,7 +50,7 @@ int main() {
 
         cnt ++;
     });
-    svr.start();
+    svr->start();
 
     return 0;
 }
