@@ -7,9 +7,16 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(OpenSSL REQUIRED)
+
+
 add_subdirectory(third-party/libuv)
 add_subdirectory(third-party/http-parser)
 add_subdirectory(third-party/leptjson)
+
+set(UTIL_DIR
+    src/util/ssl.cpp
+)
 
 add_library(websocket
     src/core/httpserver.cpp
@@ -17,12 +24,16 @@ add_library(websocket
     src/core/FileReader.cpp
     src/core/WebSocket.cpp
     src/core/WsServer.cpp
+    ${UTIL_DIR}
 )
 
 target_link_libraries(websocket PUBLIC
     uv_a
     http-parser
     leptjson
+    ${OPENSSL_LIBRARIES}
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
 target_include_directories(websocket

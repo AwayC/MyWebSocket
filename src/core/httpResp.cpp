@@ -13,6 +13,7 @@ std::string httpStatus_str(httpStatus status)
 #define STATUS_STR(status, str) case httpStatus::status: return str
     switch (status)
     {
+        STATUS_STR(SWITCHING_PROTOCOLS, "101 Web Socket Protocol Handshake");
         STATUS_STR(OK, "200 OK");
         STATUS_STR(CREATED, "201 Created");
         STATUS_STR(ACCEPTED, "202 Accepted");

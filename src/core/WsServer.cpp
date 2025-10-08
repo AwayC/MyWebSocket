@@ -18,26 +18,25 @@ WsServer::WsServer(const std::shared_ptr<HttpServer> &httpServer)
 
 void WsServer::onUpgrade(const std::shared_ptr<HttpServer::Session> &session)
 {
-    auto ws = std::make_shared<WebSocket>(session);
-    addWebSocket(ws);
+    auto ws = std::make_shared<WsSession>(session, this);
     pushWsSession(ws);
+    if (m_onConnectCb)
+    {
+        m_onConnectCb(ws);
+    }
+    ws->connect();
 }
 
-void WsServer::addWebSocket(const WebSocketPtr& wsSession)
-{
-
-}
-
-void WsServer::pushWsSession(const WebSocketPtr &wsSession)
-{
-    std::lock_guard<std::mutex> lock(m_wsSessionsMtx);
-    m_wsSessions.push_back(wsSession);
-}
-
-void WsServer::removeWsSession(const WebSocketPtr &wsSession)
+void WsServer::pushWsSession(const WsSessionPtr &ws)
 {
     std::lock_guard<std::mutex> lock(m_wsSessionsMtx);
-    auto it = std::find(m_wsSessions.begin(), m_wsSessions.end(), wsSession);
+    m_wsSessions.push_back(ws);
+}
+
+void WsServer::removeWsSession(const WsSessionPtr &ws)
+{
+    std::lock_guard<std::mutex> lock(m_wsSessionsMtx);
+    auto it = std::find(m_wsSessions.begin(), m_wsSessions.end(), ws);
     if (it != m_wsSessions.end())
     {
         std::swap(*it, m_wsSessions.back());

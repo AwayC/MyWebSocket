@@ -13,6 +13,7 @@
 #include "http_parser.h"
 #include "leptjson.h"
 #include "../src/core/httpResp.h"
+#include "../src/util/ssl.h"
 
 #define HTTP_DEFAULT_PORT 8081
 #define HTTP_DEFAULT_KEEP_ALIVE_TIMEOUT 20
@@ -89,9 +90,7 @@ public:
         httpReq m_req;
         std::shared_ptr<httpResp> m_resp;
 
-
-        char* m_recvBuf;
-        size_t m_recvBufSize;
+        uv_buf_t m_recvBuf;
 
         uv_timer_t m_keepAliveTimer{};
         bool m_isKeepAlive;
@@ -160,6 +159,11 @@ public:
          * 升级到websocket
          */
         void upgradeToWs();
+
+        /*
+         * 转移buffer到websocket会话
+         */
+        void transferBufferToWsSession(uv_buf_t* buf);
     };
 
 private:

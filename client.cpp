@@ -59,6 +59,11 @@ int main() {
     while ((bytes_read = read(client_fd, buffer, BUFFER_SIZE - 1)) > 0) {
         buffer[bytes_read] = '\0';
         printf("%s\n", buffer);
+        if (write(client_fd, http_request, strlen(http_request)) < 0) {
+            perror("Failed to send request");
+            close(client_fd);
+            exit(EXIT_FAILURE);
+        }
     }
 
     if (bytes_read < 0) {

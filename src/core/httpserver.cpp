@@ -16,8 +16,8 @@ HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(
 {
     m_resp = nullptr;
     m_owner = owner;
-    m_recvBufSize = HTTP_DEFAULT_RECV_BUF_SIZE;
-    m_recvBuf = new char[m_recvBufSize];
+    m_recvBuf = uv_buf_init(new char[HTTP_DEFAULT_RECV_BUF_SIZE],
+                                HTTP_DEFAULT_RECV_BUF_SIZE);
     memset(&m_settings, 0, sizeof(http_parser_settings));
     m_settings.on_message_begin = onReqMessageBegin;
     m_settings.on_url = onReqURL;
@@ -39,7 +39,7 @@ HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(
 };
 HttpServer::Session::~Session()
 {
-    delete[] m_recvBuf;
+    delete[] m_recvBuf.base;
     std::cout << "session destroyed" << std::endl;
 };
 
@@ -73,19 +73,18 @@ void HttpServer::Session::recv_alloc_cb(uv_handle_t* handle,
                         uv_buf_t* buf)
 {
     Session* self = static_cast<Session*>(handle->data);
-    int bufSize = self->m_recvBufSize;
+    size_t bufSize = self->m_recvBuf.len;
     if (bufSize < suggested_size)
     {
         while (bufSize < suggested_size)
         {
             bufSize += (bufSize << 1);
         }
-        self->m_recvBufSize = bufSize;
-        self->m_recvBuf = static_cast<char*>(realloc(self->m_recvBuf, bufSize));
+        self->m_recvBuf.len = bufSize;
+        self->m_recvBuf.base = static_cast<char*>(realloc(self->m_recvBuf.base, bufSize));
     }
 
-    buf->base = self->m_recvBuf;
-    buf->len = suggested_size;
+    *buf = self->m_recvBuf;
 }
 
 void HttpServer::Session::recv_cb(uv_stream_t* client,
@@ -151,7 +150,6 @@ void HttpServer::Session::onRequest()
 {
     auto self = shared_from_this( );
     std::cout << "on request" << std::endl;
-    std::cout << "session use count: " << self.use_count() << std::endl;
     m_resp->onCompleteAndSend([self](httpResp* resp){
         assert(self != nullptr);
         if (needKeepConnection(&self->m_req))
@@ -167,7 +165,6 @@ void HttpServer::Session::onRequest()
         }
         resp->clearContent();
     });
-    std::cout << "session use count after send: " << self.use_count() << std::endl;
 }
 
 void HttpServer::Session::keepAliveTimerCb(uv_timer_t* timer)
@@ -249,16 +246,23 @@ int HttpServer::Session::onReqBody(http_parser* parser, const char* at, size_t l
 
 void HttpServer::Session::upgradeToWs()
 {
-    if (m_owner->onUpgradeCb)
-        m_owner->onUpgradeCb(shared_from_this());
-    else
-    {
-        std::cerr << "upgradeToWs: onUpgradeCb is not set" << std::endl;
-        close(false);
-        return ;
-    }
+    m_resp->setStatus(httpStatus::SWITCHING_PROTOCOLS);
+    m_resp->setHeader("Upgrade", "websocket");
+    m_resp->setHeader("Connection", "Upgrade");
 
-    close(true);
+    std::string client_key = m_req.headers["Sec-WebSocket-Key"];
+
+    m_resp->setHeader("Sec-WebSocket-Key", m_tmpKey);
+
+}
+
+void HttpServer::Session::transferBufferToWsSession(uv_buf_t* buf)
+{
+    delete[] buf->base;
+
+    *buf = m_recvBuf;
+    m_recvBuf.base = nullptr;
+    m_recvBuf.len = 0;
 }
 
 /************* HttpServer *************/
@@ -269,12 +273,10 @@ void HttpServer::handle_connect(uv_stream_t* client)
 
     std::cout << "handle request" << std::endl;
     client->data = ss.get();
-    std::cout << "session use count: " << ss.use_count() << std::endl;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_sessions.push_back(ss);
     }
-    std::cout << "session use count: " << ss.use_count() << std::endl;
     uv_read_start(client, Session::recv_alloc_cb, Session::recv_cb);
 }
 
@@ -416,19 +418,16 @@ void HttpServer::setKeepAliveTimeout(int timeout)
 
 void HttpServer::closeSession(SessionPtr &session, bool isUpgrade)
 {
-    uv_read_stop(session->m_client);
-
+    uv_stream_t* client = session->m_client;
+    uv_read_stop(client);
     if (!isUpgrade)
     {
-        uv_stream_t* client = session->m_client;
         uv_close((uv_handle_t*)client, [](uv_handle_t* client){
             delete client;
         });
     }
 
-    std::cout << "session use count: " << session.use_count() << std::endl;
     removeSession(session);
-    std::cout << "session use count: " << session.use_count() << std::endl;
     std::cout << "close session" << std::endl;
 
 }
@@ -439,11 +438,8 @@ void HttpServer::removeSession(SessionPtr &session)
     auto it = std::find(m_sessions.begin(), m_sessions.end(), session);
 
     if (it != m_sessions.end()) {
-        // 2. 与最后一个元素交换
-        // std::iter_swap 比 *it = std::move(sessions.back()) 更通用
         std::iter_swap(it, m_sessions.end() - 1);
 
-        // 3. 弹出最后一个元素
         m_sessions.pop_back();
     }
 }
