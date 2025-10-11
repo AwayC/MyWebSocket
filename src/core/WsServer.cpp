@@ -16,6 +16,14 @@ WsServer::WsServer(const std::shared_ptr<HttpServer> &httpServer)
     });
 }
 
+WsServer::~WsServer()
+{
+    std::lock_guard<std::mutex> lock(m_wsSessionsMtx);
+    m_wsSessions.clear();
+}
+
+
+
 void WsServer::onUpgrade(const std::shared_ptr<HttpServer::Session> &session)
 {
     auto ws = std::make_shared<WsSession>(session, this);

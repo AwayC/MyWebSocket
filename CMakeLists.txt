@@ -24,6 +24,7 @@ add_library(websocket
     src/core/FileReader.cpp
     src/core/WebSocket.cpp
     src/core/WsServer.cpp
+    src/core/websocket_parser.cpp
     ${UTIL_DIR}
 )
 
@@ -41,9 +42,16 @@ target_include_directories(websocket
     include/
 )
 
+#test http server
 add_executable(MyWebsocket main.cpp)
 add_executable(client client.cpp)
 
 target_link_libraries(MyWebsocket
+    websocket
+)
+
+#test ws server
+add_executable(ws_server test/WsServer.cpp)
+target_link_libraries(ws_server
     websocket
 )

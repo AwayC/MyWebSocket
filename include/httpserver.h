@@ -201,11 +201,16 @@ private:
     }
     void handle_errReq(httpReq* req, httpResp* resp);
 
-    /*
+    /**
      * 关闭会话
      */
-    void closeSession(SessionPtr &session, bool isUpgrade = false);
-    void removeSession(SessionPtr &session);
+    void closeSession(const SessionPtr &session, bool isUpgrade = false);
+    void removeSession(const SessionPtr &session);
+
+    /**
+     *  upgrade
+     */
+    void upgradeSession(const SessionPtr &session);
 };
 
 

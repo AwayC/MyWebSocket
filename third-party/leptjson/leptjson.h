@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <stddef.h>
 #include <string>
 #include <vector>
@@ -26,8 +27,8 @@ private:
 	u v;
 
 	void free();
-	void stringify_value(std::string &stk);
-	void stringify_string(std::string& stk);
+	void stringify_value(std::string &stk) const;
+	void stringify_string(std::string& stk) const;
 
 public :
 	lept_value() noexcept ;
@@ -84,7 +85,13 @@ public :
 	void set_object(object_t&& obj);
 	void set_object(const std::map<std::string, lept_value>& mp);
 
-	std::string stringify();
+	lept_value& operator[](const std::string& key)
+	{
+		assert(type == lept_type::object);
+		return v.obj[key];
+	}
+
+	std::string stringify() const;
 };
 
 enum  {

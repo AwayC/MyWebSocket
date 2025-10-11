@@ -251,8 +251,14 @@ void HttpServer::Session::upgradeToWs()
     m_resp->setHeader("Connection", "Upgrade");
 
     std::string client_key = m_req.headers["Sec-WebSocket-Key"];
+    std::string accept_key = WsUtil::calculate_accept_key(client_key);
+    m_resp->setHeader("Sec-WebSocket-Accept", accept_key);
 
-    m_resp->setHeader("Sec-WebSocket-Key", m_tmpKey);
+    auto self = shared_from_this( );
+    m_resp->onCompleteAndSend([self](httpResp* resp){
+        assert(self != nullptr);
+        self->m_owner->upgradeSession(self);
+    });
 
 }
 
@@ -416,7 +422,7 @@ void HttpServer::setKeepAliveTimeout(int timeout)
     m_keepAliveTimeout = timeout;
 }
 
-void HttpServer::closeSession(SessionPtr &session, bool isUpgrade)
+void HttpServer::closeSession(const SessionPtr &session, bool isUpgrade)
 {
     uv_stream_t* client = session->m_client;
     uv_read_stop(client);
@@ -432,7 +438,7 @@ void HttpServer::closeSession(SessionPtr &session, bool isUpgrade)
 
 }
 
-void HttpServer::removeSession(SessionPtr &session)
+void HttpServer::removeSession(const SessionPtr &session)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     auto it = std::find(m_sessions.begin(), m_sessions.end(), session);
@@ -448,3 +454,10 @@ void HttpServer::onUpgrade(const std::function<void(std::shared_ptr<Session>)>& 
     onUpgradeCb = callback;
 }
 
+void HttpServer::upgradeSession(const SessionPtr &session)
+{
+    assert(onUpgradeCb != nullptr);
+
+    closeSession(session, true);
+    onUpgradeCb(session);
+}

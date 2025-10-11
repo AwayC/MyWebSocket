@@ -8,7 +8,7 @@
 #include "WebSocket.h"
 #include "uv.h"
 
-
+class WsSession;
 using WsSessionPtr = std::shared_ptr<WsSession>;
 
 class WsServer {

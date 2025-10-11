@@ -454,7 +454,7 @@ void lept_value::set_object(const std::map<std::string, lept_value>& mp) {
 	new(&v.obj) std::map<std::string, lept_value>(mp);
 }
 
-void lept_value::stringify_string(std::string& stk) { 
+void lept_value::stringify_string(std::string& stk) const {
 	stk += '\"'; 
 	for (int i = 0; i < v.s.size(); i++) {
 		char ch = v.s[i]; 
@@ -481,7 +481,7 @@ void lept_value::stringify_string(std::string& stk) {
 	stk += '\"'; 
 }
 
-void lept_value::stringify_value(std::string& stk) {
+void lept_value::stringify_value(std::string& stk) const {
 	int flag; 
 	switch (type) {
 		case lept_type::null: stk.append("null"); break; 
@@ -528,9 +528,9 @@ void lept_value::stringify_value(std::string& stk) {
 	}
 }
 
-std::string lept_value::stringify() {
+std::string lept_value::stringify() const{
 	std::string stk; 
-	stringify_value(stk); 
+	stringify_value(stk);
 	return stk; 
 }
 

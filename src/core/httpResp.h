@@ -63,7 +63,7 @@ public:
      * 用户发送方法
      */
     void sendStr(const std::string& str);
-    void sendJson(lept_value& json);
+    void sendJson(const lept_value& json);
     void sendFile(const std::string& path);
 
     void setHeader(const std::string& key, const std::string& value);

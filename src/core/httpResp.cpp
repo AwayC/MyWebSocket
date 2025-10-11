@@ -90,7 +90,7 @@ void httpResp::sendFile(const std::string& path)
     m_sendType = SendType::FILE;
 }
 
-void httpResp::sendJson(lept_value& json)
+void httpResp::sendJson(const lept_value& json)
 {
     m_body = json.stringify();
     m_headers["Content-Type"] = "application/json";

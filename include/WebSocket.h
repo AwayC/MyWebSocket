@@ -4,9 +4,9 @@
 
 #pragma once
 
-#include <WsServer.h>
-
 #include "httpserver.h"
+#include "../src/core/websocket_parser.h"
+#include "leptjson.h"
 
 enum class WsStatus {
     CONNECTING,
@@ -15,44 +15,42 @@ enum class WsStatus {
     CLOSED,
 };
 
-enum class BinaryType {
-    blob,
-    arraybuffer,
-};
-
 class WsServer;
+class WsSession;
+
+using WsSessionPtr = std::shared_ptr<WsSession>;
 
 
-class WsSession : public std::enable_shared_from_this<WsSession>{
+class WsSession : public std::enable_shared_from_this<WsSession> {
 public:
     WsSession(const HttpServer::SessionPtr& session, WsServer* owner);
     ~WsSession();
 
     void close();
-    void setBinaryType(const BinaryType type)
-    {
-        m_binaryType = type;
-    }
-    void send(std::string data);
+
+    void send(const lept_value& json);
+    void send(const std::string& str);
+    void send(const char* str);
+
     void connect();
     WsStatus getReadyState() const
     {
         return readyState;
     }
 
-    void onConnect(const std::function<void(WsSession*)>& callback)
+    void onConnect(const std::function<void(WsSessionPtr)>& callback)
     {
         m_onConnectCb = callback;
     }
-    void onClose(const std::function<void(WsSession*)>& callback)
+    void onClose(const std::function<void(WsSessionPtr)>& callback)
     {
         m_onCloseCb = callback;
     }
-    void onMessage(const std::function<void(WsSession*)>& callback)
+    void onMessage(const std::function<void(WsSessionPtr)>& callback)
     {
         m_onMessageCb = callback;
     }
-    void onError(const std::function<void(WsSession*)>& callback)
+    void onError(const std::function<void(WsSessionPtr)>& callback)
     {
         m_onErrorCb = callback;
     }
@@ -62,6 +60,14 @@ public:
         return m_client;
     }
 
+    std::string getStrMessage()
+    {
+        return {m_decodeData.begin(), m_decodeData.end()};
+    }
+
+    lept_value getJsonMessage();
+
+    void sendPing();
 
 private:
     uv_loop_t* m_loop{};
@@ -72,14 +78,33 @@ private:
 
     WsStatus readyState;
 
+    websocket_parser m_parser;
+    std::vector<uint8_t> m_decodeData;
+
+    struct WriteCtx
+    {
+        std::string m_str;
+        std::vector<char> m_head;
+        void setMsg(const std::string& str)
+        {
+            m_str = str;
+        }
+        void setMsg(const char* str)
+        {
+            m_str = std::string(str);
+        }
+
+        uv_write_t req;
+        uv_buf_t buf[2];
+    } m_write_ctx;
+
     //netWorking
-    std::function<void(WsSession*)> m_onConnectCb;
-    std::function<void(WsSession*)> m_onCloseCb;
-    std::function<void(WsSession*)> m_onErrorCb;
+    std::function<void(WsSessionPtr)> m_onConnectCb;
+    std::function<void(WsSessionPtr)> m_onCloseCb;
+    std::function<void(WsSessionPtr)> m_onErrorCb;
 
     //messaging
-    std::function<void(WsSession*)> m_onMessageCb;
-    BinaryType m_binaryType;
+    std::function<void(WsSessionPtr)> m_onMessageCb;
 
     static void recv_alloc_cb(uv_handle_t* handle,
                             size_t suggested_size,
@@ -89,5 +114,9 @@ private:
                         ssize_t nread,
                         const uv_buf_t* buf);
 
-    void handleMessage(int nread);
+    void handleMessage();
+
+    void sendPong();
+
+    void inter_send(uint8_t opcode);
 };
