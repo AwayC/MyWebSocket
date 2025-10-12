@@ -60,7 +60,7 @@ public:
     websocket_parser(WsParseBuf& buf);
     ~websocket_parser();
 
-    WsParseErr parse(const uv_buf_t& frame);
+    WsParseErr parse(const uv_buf_t& frame, size_t len);
     const WsParseBuf& getContent() const
     {
         return m_buf;
@@ -94,6 +94,7 @@ private:
     uint64_t m_payload_len{}; // 有效载荷长度
     std::vector<uint8_t> m_mask_key; // 掩码密钥
     WsParseBuf& m_buf; // 解析缓冲区
+    int m_len;
 
     int m_parsed_len{};
 

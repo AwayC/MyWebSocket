@@ -26,6 +26,7 @@ WsServer::~WsServer()
 
 void WsServer::onUpgrade(const std::shared_ptr<HttpServer::Session> &session)
 {
+    std::cout << "ws server upgrade" << std::endl;
     auto ws = std::make_shared<WsSession>(session, this);
     pushWsSession(ws);
     if (m_onConnectCb)

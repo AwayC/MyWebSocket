@@ -11,11 +11,13 @@ WsSession::WsSession(const HttpServer::SessionPtr& session, WsServer* owner) :
     m_client(session->getClient()),
     m_loop(session->getLoop()),
     m_owner(owner),
-    m_decodeData(WsParseBuf()),
+    m_decodeData(WsParseBuf()), m_write_ctx(),
     m_parser(m_decodeData)
 {
     session->transferBufferToWsSession(&m_recvBuf);
     readyState = WsStatus::CLOSED;
+
+    std::cout << "websocket session created" << std::endl;
 }
 
 WsSession::~WsSession()
@@ -29,7 +31,9 @@ void WsSession::connect()
     readyState = WsStatus::CONNECTING;
 
     //重新开始监听
+    m_client->data = this;
     uv_read_start(m_client, recv_alloc_cb, recv_cb);
+    std::cout << "websocket session start read" << std::endl;
 
     readyState = WsStatus::OPEN;
     if (m_onConnectCb)
@@ -68,6 +72,8 @@ void WsSession::recv_alloc_cb(uv_handle_t* handle,
                             uv_buf_t* buf)
 {
     WsSession* self = static_cast<WsSession*>(handle->data);
+    assert(self != nullptr);
+
     size_t bufSize = self->m_recvBuf.len;
     if (bufSize < suggested_size)
     {
@@ -88,6 +94,7 @@ void WsSession::recv_cb(uv_stream_t* stream,
 {
     WsSession* self = static_cast<WsSession*>(stream->data);
     assert(self != nullptr);
+    std::cout << "websocket session recv " << nread << " bytes" << std::endl;
 
     if (nread < 0)
     {
@@ -105,14 +112,16 @@ void WsSession::recv_cb(uv_stream_t* stream,
 
     if (buf->base)
     {
-        self->handleMessage();
+        self->handleMessage(nread);
     }
 }
 
-void WsSession::handleMessage()
+void WsSession::handleMessage(size_t nread)
 {
-    WsParseErr err = m_parser.parse(m_recvBuf);
+    std::cout << "websocket session handle message" << std::endl;
+    WsParseErr err = m_parser.parse(m_recvBuf, nread);
 
+    std::cout << "websocket parsed " << static_cast<int>(err) << std::endl;
     if (err == WsParseErr::NOT_COMPLETED)
         return ;
     if (err != WsParseErr::SUCCESS)
@@ -125,6 +134,7 @@ void WsSession::handleMessage()
     }
 
     int opcode = m_parser.getOpcode();
+    std::cout << "opcode " << opcode << std::endl;
     if (opcode == WS_CLOSE)
     {
         close();
@@ -138,8 +148,10 @@ void WsSession::handleMessage()
 
     if (m_onMessageCb)
     {
+        std::cout << "onMessage" << std::endl;
+        m_write_ctx.clearMsg();
         m_onMessageCb(shared_from_this());
-        inter_send(WS_PONG);
+        inter_send(WS_TEXT);
     }
 }
 
@@ -172,6 +184,7 @@ void WsSession::send(const char* str)
 
 void WsSession::inter_send(uint8_t opcode)
 {
+    std::cout << "ws session inter send" << std::endl;
     // 发送帧头
 
     std::vector<char>& header = m_write_ctx.m_head;

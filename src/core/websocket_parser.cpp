@@ -23,11 +23,12 @@ std::string WsErr_Str(WsParseErr err)
 }
 
 
-WsParseErr websocket_parser::parse(const uv_buf_t& frame)
+WsParseErr websocket_parser::parse(const uv_buf_t& frame, size_t len)
 {
+    m_frame = frame;
     char *data = frame.base;
-    int len = frame.len;
-
+    m_len = len;
+    m_parsed_len = 0;
     // 检查帧是否为空
     if (len < 2)
     {
@@ -45,7 +46,8 @@ WsParseErr websocket_parser::parse(const uv_buf_t& frame)
     // MASK (bit 0)
     m_mask = data[1] & 0x80;
     // PAYLOAD LEN (bit 1:7)
-    if (m_parsed_len = parse_payload_len() < 0)
+    m_payload_len = parse_payload_len();
+    if (m_payload_len < 0)
     {
         return WsParseErr::INVALID_PAYLOAD_LEN;
     }
@@ -97,7 +99,7 @@ WsParseErr websocket_parser::parse(const uv_buf_t& frame)
 int websocket_parser::parse_payload_len()
 {
     char *data = m_frame.base;
-    size_t len = m_frame.len;
+    size_t len = m_len;
 
     int payload_len = data[1] & 0x7F;
     m_parsed_len += 2;
@@ -130,6 +132,7 @@ int websocket_parser::parse_payload_len()
 websocket_parser::websocket_parser(WsParseBuf& buf) : m_buf(buf)
 {
     last_completed = true;
+    m_mask_key.resize(4);
 }
 
 websocket_parser::~websocket_parser()

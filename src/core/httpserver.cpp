@@ -258,6 +258,7 @@ void HttpServer::Session::upgradeToWs()
     m_resp->onCompleteAndSend([self](httpResp* resp){
         assert(self != nullptr);
         self->m_owner->upgradeSession(self);
+        std::cout << "upgrade to websocket session" << std::endl;
     });
 
 }
@@ -426,8 +427,10 @@ void HttpServer::closeSession(const SessionPtr &session, bool isUpgrade)
 {
     uv_stream_t* client = session->m_client;
     uv_read_stop(client);
+
     if (!isUpgrade)
     {
+        std::cout << "close client fd" << std::endl;
         uv_close((uv_handle_t*)client, [](uv_handle_t* client){
             delete client;
         });

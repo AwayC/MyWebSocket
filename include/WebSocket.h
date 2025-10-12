@@ -74,7 +74,7 @@ private:
     uv_stream_t* m_client;
     WsServer* m_owner;
 
-    uv_buf_t m_recvBuf{};
+    uv_buf_t m_recvBuf;
 
     WsStatus readyState;
 
@@ -93,7 +93,10 @@ private:
         {
             m_str = std::string(str);
         }
-
+        void clearMsg()
+        {
+            m_str.clear();
+        }
         uv_write_t req;
         uv_buf_t buf[2];
     } m_write_ctx;
@@ -114,7 +117,7 @@ private:
                         ssize_t nread,
                         const uv_buf_t* buf);
 
-    void handleMessage();
+    void handleMessage(size_t nread);
 
     void sendPong();
 

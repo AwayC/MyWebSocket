@@ -157,10 +157,10 @@ void httpResp::onWriteEnd(uv_write_t *req, int status)
 {
     if (status < 0)
     {
-        std::cerr << "write error" << std::endl;
+        std::cerr << "http response write error" << std::endl;
     } else
     {
-        std::cout << "write success" << std::endl;
+        std::cout << "http response write success" << std::endl;
     }
 
     auto ctx = static_cast<WriteContext*>(req->data);

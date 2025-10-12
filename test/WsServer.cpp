@@ -16,8 +16,11 @@ int main()
         std::cout << "websocket session connected" << std::endl;
         session->onMessage([](WsSessionPtr ws)
         {
-            std::cout << "websocket session message received" << std::endl;
+            std::string msg = ws->getStrMessage();
+            std::cout << msg << std::endl;
 
+            std::cout << "websocket session message received" << std::endl;
+            ws->send(msg);
         });
     });
 
