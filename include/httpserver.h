@@ -130,7 +130,7 @@ public:
          * 初始化会话
          */
         void init();
-        void handle_request(char* data, size_t size, uv_stream_t* client);
+        void handle_request();
 
         /*
          * 长连接操作
@@ -138,10 +138,6 @@ public:
         void startKeepAliveTimer();
         void stopKeepAliveTimer();
 
-        /*
-         * 处理回调
-         */
-        void onRequest();
 
         uv_loop_t* getLoop() const
         {
@@ -199,7 +195,7 @@ private:
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_sessions.size();
     }
-    void handle_errReq(httpReq* req, httpResp* resp);
+    static void handle_errReq(httpReq* req, httpResp* resp);
 
     /**
      * 关闭会话

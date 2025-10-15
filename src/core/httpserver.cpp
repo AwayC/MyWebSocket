@@ -45,7 +45,23 @@ HttpServer::Session::~Session()
 
 void HttpServer::Session::init()
 {
+    auto self = this;
     m_resp = httpResp::create(shared_from_this());
+    m_resp->onSent([self](httpResp* resp)
+    {
+        if (needKeepConnection(&self->m_req))
+        {
+            //keep alive
+            std::cout << "keep alive connection" << std::endl;
+            self->m_isKeepAlive = true;
+            self->startKeepAliveTimer();
+        } else
+        {
+            std::cout << "close connection" << std::endl;
+            self->close();
+        }
+        resp->clearContent();
+    });
     m_resp->init();
 }
 
@@ -112,21 +128,21 @@ void HttpServer::Session::recv_cb(uv_stream_t* client,
 
     if (buf->base)
     {
-        ep->handle_request(buf->base, nread, client);
+        size_t nparsed = http_parser_execute(&ep->m_parser, &ep->m_settings, buf->base, nread);
+        if (nparsed != nread)
+        {
+            std::cerr << "parse error: " << std::endl;
+        }
     }
 }
 
-void HttpServer::Session::handle_request(char* data, size_t size, uv_stream_t* client)
+void HttpServer::Session::handle_request()
 {
-    size_t nparsed = http_parser_execute(&m_parser, &m_settings, data, size);
     if (m_parser.upgrade)
     {
         //todo: upgrade to websocket
         upgradeToWs();
 
-    } else if (nparsed != size)
-    {
-        std::cerr << "parse error" << std::endl;
     } else
     {
         if (m_req.method == HTTP_GET)
@@ -142,30 +158,9 @@ void HttpServer::Session::handle_request(char* data, size_t size, uv_stream_t* c
             else
                 m_owner->handle_errReq(&m_req, m_resp.get());
         }
-        onRequest();
     }
 }
 
-void HttpServer::Session::onRequest()
-{
-    auto self = shared_from_this( );
-    std::cout << "on request" << std::endl;
-    m_resp->onCompleteAndSend([self](httpResp* resp){
-        assert(self != nullptr);
-        if (needKeepConnection(&self->m_req))
-        {
-            //keep alive
-            std::cout << "keep alive connection" << std::endl;
-            self->m_isKeepAlive = true;
-            self->startKeepAliveTimer();
-        } else
-        {
-            std::cout << "close connection" << std::endl;
-            self->close();
-        }
-        resp->clearContent();
-    });
-}
 
 void HttpServer::Session::keepAliveTimerCb(uv_timer_t* timer)
 {
@@ -207,7 +202,9 @@ int HttpServer::Session::onReqHeaderComplete(http_parser* parser)
 
 int HttpServer::Session::onReqMessageComplete(http_parser* parser)
 {
-    std::cout << "onReqMessageComplete" << std::endl;
+    Session* ep = (Session*)parser->data;
+    assert(ep != nullptr);
+    ep->handle_request();
     return 0;
 }
 
@@ -255,11 +252,12 @@ void HttpServer::Session::upgradeToWs()
     m_resp->setHeader("Sec-WebSocket-Accept", accept_key);
 
     auto self = shared_from_this( );
-    m_resp->onCompleteAndSend([self](httpResp* resp){
+    m_resp->onSent([self](httpResp* resp){
         assert(self != nullptr);
         self->m_owner->upgradeSession(self);
         std::cout << "upgrade to websocket session" << std::endl;
     });
+    m_resp->sendStr("");
 
 }
 
@@ -436,6 +434,7 @@ void HttpServer::closeSession(const SessionPtr &session, bool isUpgrade)
         });
     }
 
+    session->m_resp->onSent(nullptr);
     removeSession(session);
     std::cout << "close session" << std::endl;
 

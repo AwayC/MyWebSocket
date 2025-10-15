@@ -72,11 +72,9 @@ public:
     /*
      * 完成回调，发送请求
      */
-    void onCompleteAndSend(const std::function<void(httpResp*)>&& cb);
-    void onCompleteAndSend(const std::function<void(httpResp*)>& cb)
-    {
-        onCompleteAndSend(std::move(cb));
-    }
+    void onSent(const std::function<void(httpResp*)>& cb);
+
+
     void clearContent();
 private:
     /*
@@ -98,7 +96,7 @@ private:
     std::string m_url;
     std::string m_filePath;
 
-    std::function<void(httpResp*)> m_onComplete;
+    std::function<void(httpResp*)> m_onSent;
     enum class SendType
     {
         NONE = 0,

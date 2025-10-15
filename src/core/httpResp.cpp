@@ -88,6 +88,8 @@ void httpResp::sendFile(const std::string& path)
     m_headers["Content-Type"] = "application/octet-stream";
     m_filePath = path;
     m_sendType = SendType::FILE;
+    // read file
+    m_reader.fileRead(m_filePath);
 }
 
 void httpResp::sendJson(const lept_value& json)
@@ -95,6 +97,8 @@ void httpResp::sendJson(const lept_value& json)
     m_body = json.stringify();
     m_headers["Content-Type"] = "application/json";
     m_sendType = SendType::JSON;
+
+    send();
 }
 
 void httpResp::sendStr(const std::string& str)
@@ -102,6 +106,8 @@ void httpResp::sendStr(const std::string& str)
     m_body = str;
     m_headers["Content-Type"] = "text/plain";
     m_sendType = SendType::STR;
+
+    send();
 }
 
 void httpResp::setHeader(const std::string& key, const std::string& value)
@@ -117,7 +123,7 @@ void httpResp::setStatus(httpStatus status)
 void httpResp::send()
 {
     m_head = "HTTP/1.1 " + httpStatus_str(m_status) + "\r\n";
-    for (auto header : m_headers)
+    for (const auto& header : m_headers)
     {
         m_head.append(header.first + ": " + header.second + "\r\n");
     }
@@ -164,23 +170,17 @@ void httpResp::onWriteEnd(uv_write_t *req, int status)
     }
 
     auto ctx = static_cast<WriteContext*>(req->data);
-    if (ctx->resp->m_onComplete)
+    if (ctx->resp->m_onSent)
     {
-        ctx->resp->m_onComplete(ctx->resp.get());
-        ctx->resp->m_onComplete = nullptr;
+        ctx->resp->m_onSent(ctx->resp.get());
     }
 
     delete ctx;
 }
 
-void httpResp::onCompleteAndSend(const std::function<void(httpResp*)>&& cb)
+void httpResp::onSent(const std::function<void(httpResp*)>& cb)
 {
-    m_onComplete = std::move(cb);
-
-    if (SendType::FILE == m_sendType)
-        m_reader.fileRead(m_filePath);
-    else
-        send();
+    m_onSent = cb;
 }
 
 void httpResp::clearContent()
