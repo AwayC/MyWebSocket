@@ -53,56 +53,60 @@ enum class WsParseErr : uint8_t {
 
 std::string WsErr_Str(WsParseErr err);
 
-using WsParseBuf = std::vector<uint8_t>;
+using WsParseBuf = std::vector<char>;
 
-class websocket_parser {
-public:
-    websocket_parser(WsParseBuf& buf);
-    ~websocket_parser();
+using WsParseComplete = std::function<void()>;
 
-    WsParseErr parse(const uv_buf_t& frame, size_t len);
-    const WsParseBuf& getContent() const
-    {
-        return m_buf;
-    }
-
-    uint8_t getOpcode() const
-    {
-        return m_opcode;
-    }
-
-    bool getFin() const
-    {
-        return m_fin;
-    }
-
-    size_t getLen() const
-    {
-        return m_buf.size();
-    }
-
-private:
-    bool m_fin{}; // FIN 位
+struct WsFrame
+{
+    bool fin; // FIN 位
 
     /**
      * RSV 位 1, 2, 3
      * m_rsv = (r1 << 2) | (r2 << 1) | r3
      */
-    uint8_t m_rsv{};
-    uint8_t m_opcode{}; // 操作码
-    bool m_mask{}; // MASK 位
-    uint64_t m_payload_len{}; // 有效载荷长度
-    std::vector<uint8_t> m_mask_key; // 掩码密钥
-    WsParseBuf& m_buf; // 解析缓冲区
-    int m_len;
+    uint8_t rsv{};
+    uint8_t opcode{}; // 操作码
+    bool mask{}; // MASK 位
+    size_t payload_len{}; // 有效载荷长度
+    std::vector<uint8_t> mask_key; // 掩码密钥
+    WsParseBuf& payload; // 解析缓冲区
 
-    int m_parsed_len{};
+};
 
-    uv_buf_t m_frame; // 解析帧
 
-    bool last_completed;
 
-    int parse_payload_len();
+class websocket_parser {
+public:
+
+    websocket_parser();
+    ~websocket_parser();
+    WsParseErr parse(const uv_buf_t& data, WsFrame* frame);
+
+    void onComplete(const WsParseComplete& cb)
+    {
+        m_onComplete = cb;
+    }
+
+private:
+
+    enum class Status
+    {
+        finAndOpcode,
+        payloadLenAndMask,
+        payloadLen,
+        maskKey,
+        payload,
+        complete,
+    };
+
+    Status m_status; // 当前解析状态
+    size_t m_byteNeed; // 还需要多少字节
+    WsFrame* m_frame;
+    bool m_isContinuation; // 是否是继续帧
+    size_t m_maskIndex; // 掩码索引
+
+    WsParseComplete m_onComplete;
 
 };
 

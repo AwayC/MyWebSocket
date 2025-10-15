@@ -45,8 +45,8 @@ HttpServer::Session::~Session()
 
 void HttpServer::Session::init()
 {
-    auto self = this;
-    m_resp = httpResp::create(shared_from_this());
+    auto self = shared_from_this();
+    m_resp = httpResp::create(self);
     m_resp->onSent([self](httpResp* resp)
     {
         if (needKeepConnection(&self->m_req))

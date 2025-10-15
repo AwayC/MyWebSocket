@@ -4,6 +4,8 @@
 
 #include "websocket_parser.h"
 
+#include <cassert>
+
 std::string WsErr_Str(WsParseErr err)
 {
 #define WsErr_Str(err) case WsParseErr::err : return #err
@@ -22,117 +24,150 @@ std::string WsErr_Str(WsParseErr err)
 #undef WsErr_Str
 }
 
+#define SWITCH_TO_MASK(frame) do {\
+    if (mask) \
+    { \
+        m_status = Status::maskKey; \
+        m_byteNeed = 4; \
+        frame->mask_key.clear(); \
+    } else \
+    { \
+        m_status = Status::payload; \
+        m_byteNeed = frame->payload_len; \
+    } \
+    }while (0)
 
-WsParseErr websocket_parser::parse(const uv_buf_t& frame, size_t len)
+
+#define GET_FIN(ch)             ((ch) & 0x80)
+#define GET_RSV(ch)             (((ch) & 0x40) >> 4)
+#define GET_OPCODE(ch)          ((ch) & 0x0F)
+#define GET_MASK(ch)            ((ch) & 0x80)
+#define GET_PAYLOAD_LEN(ch)     ((ch) & 0x7F)
+
+WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
 {
+    const char* data_ = data.base;
+    int len = data.len;
     m_frame = frame;
-    char *data = frame.base;
-    m_len = len;
-    m_parsed_len = 0;
-    // 检查帧是否为空
-    if (len < 2)
+    const char* ch;
+    bool mask = false;
+
+    if (len == 0)
     {
-        return WsParseErr::INVALID_FRAME;
+        return WsParseErr::SUCCESS;
     }
 
-    // FIN (bit 0)
-    m_fin = data[0] & 0x80;
-    // RSV (bit 1:3)
-    m_rsv = (data[0] & 0x70) >> 4;  //0111 0000
-    // OPCODE (bit 4:7)
-    if (last_completed)
-        m_opcode = (data[0] & 0x0F);
-
-    // MASK (bit 0)
-    m_mask = data[1] & 0x80;
-    // PAYLOAD LEN (bit 1:7)
-    m_payload_len = parse_payload_len();
-    if (m_payload_len < 0)
+    for (ch = data_; ch != data_ + len; ch ++)
     {
-        return WsParseErr::INVALID_PAYLOAD_LEN;
-    }
-
-    if (last_completed)
-    {
-        m_buf.clear();
-    }
-    // MASK KEY (4 bytes)
-    if (m_mask)
-    {
-        if (len < m_parsed_len + 4)
-            return WsParseErr::INVALID_MASK;
-        for (int i = 0;i < 4;i ++)
+        switch (m_status)
         {
-            m_mask_key[i] = data[m_parsed_len + i];
+        case Status::finAndOpcode:
+            frame->fin = GET_FIN(*ch);
+            frame->rsv = GET_RSV(*ch);
+            if (!m_isContinuation)
+            {
+                frame->opcode = GET_OPCODE(*ch);
+            }
+
+            m_status = Status::payloadLenAndMask;
+            break ;
+
+        case Status::payloadLenAndMask:
+            frame->mask = mask = GET_MASK(*ch);
+            frame->payload_len = GET_PAYLOAD_LEN(*ch);
+
+            if (frame->payload_len <= 125)
+            {
+                SWITCH_TO_MASK(frame);
+            } else if (frame->payload_len == 126)
+            {
+                frame->payload_len = 0;
+                m_status = Status::payloadLen;
+                m_byteNeed = 2;
+            } else
+            {
+                frame->payload_len = 0;
+                m_status = Status::payloadLen;
+                m_byteNeed = 8;
+            }
+            break ;
+
+        case Status::payloadLen:
+            if (m_byteNeed)
+            {
+                frame->payload_len = (frame->payload_len << 1) + (*ch);
+                m_byteNeed --;
+            }
+            if (!m_byteNeed)
+            {
+                SWITCH_TO_MASK(frame);
+            }
+            break ;
+
+        case Status::maskKey:
+            if (m_byteNeed)
+            {
+                frame->mask_key.push_back(*ch);
+                m_byteNeed --;
+            }
+            if (!m_byteNeed)
+            {
+                m_status = Status::maskKey;
+            }
+            break ;
+        case Status::payload:
+            size_t to_read = std::min(static_cast<size_t>(data_ + len - ch),
+                                        frame->payload_len);
+            if (mask)
+            {
+                for (size_t i = 0;i < to_read;i ++)
+                {
+                    frame->payload.emplace_back((*(ch + i)) ^ frame->mask_key[m_maskIndex]);
+                    m_maskIndex = (m_maskIndex + 1) % 4;
+                }
+            } else
+            {
+                frame->payload.insert(frame->payload.end(),
+                                        ch,
+                                        ch + to_read);
+            }
+
+            m_byteNeed -= to_read;
+            ch += to_read - 1;
+
+            if (!m_byteNeed)
+            {
+                m_status = Status::complete;
+                ch --;
+            }
+            break ;
+        case Status::complete:
+            m_maskIndex = 0;
+            m_byteNeed = 0;
+            m_status = Status::finAndOpcode;
+
+            if (frame->fin)
+            {
+                m_isContinuation = false;
+                assert(m_onComplete != nullptr);
+                m_onComplete();
+            } else
+            {
+                m_isContinuation = true;
+            }
+            break ;
         }
-        m_parsed_len += 4;
     }
 
-    // PAYLOAD DATA
-    if (len != m_parsed_len + m_payload_len)
-        return WsParseErr::INVALID_PAYLOAD_LEN;
-
-    // 对 PAYLOAD DATA 进行解密
-    if (m_mask)
-    {
-        for (int i = 0;i < m_payload_len;i ++)
-        {
-            m_buf.emplace_back(data[m_parsed_len + i] ^ m_mask_key[i % 4]);
-        }
-    }
-    else
-    {
-        m_buf.insert(m_buf.end(), data + m_parsed_len, data + m_parsed_len + m_payload_len);
-    }
-
-
-    if (m_fin == false)
-    {
-        last_completed = false;
-        return WsParseErr::NOT_COMPLETED;
-    }
-
-    last_completed = true;
     return WsParseErr::SUCCESS;
 }
 
-int websocket_parser::parse_payload_len()
+
+websocket_parser::websocket_parser()
 {
-    char *data = m_frame.base;
-    size_t len = m_len;
-
-    int payload_len = data[1] & 0x7F;
-    m_parsed_len += 2;
-
-    if (payload_len == 126)
-    {
-        if (len < 4)
-            return -1;
-        payload_len = (data[2] << 8) | data[3];
-
-        m_parsed_len += 2;
-    }
-    else if (payload_len == 127)
-    {
-        if (len < 10)
-            return -1;
-
-        payload_len = 0;
-        for (int i = 2;i < 2 + 8;i ++)
-        {
-            payload_len = payload_len << 8 | data[i];
-        }
-
-        m_parsed_len += 8;
-    }
-
-    return payload_len;
-}
-
-websocket_parser::websocket_parser(WsParseBuf& buf) : m_buf(buf)
-{
-    last_completed = true;
-    m_mask_key.resize(4);
+    m_status = Status::finAndOpcode;
+    m_byteNeed = 1;
+    m_maskIndex = 0;
 }
 
 websocket_parser::~websocket_parser()
