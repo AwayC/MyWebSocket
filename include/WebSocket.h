@@ -32,6 +32,7 @@ public:
     void send(const lept_value& json);
     void send(const std::string& str);
     void send(const char* str);
+    void sendFile(const std::string& path);
 
     void connect();
     WsStatus getReadyState() const
@@ -94,12 +95,19 @@ private:
         {
             m_str = std::string(str);
         }
+        void setMsg(FileReader* reader)
+        {
+            m_reader = reader;
+            isFile = true;
+        }
         void clearMsg()
         {
             m_str.clear();
         }
+        bool isFile;
+        FileReader* m_reader;
         uv_write_t req;
-        uv_buf_t buf[2];
+        std::vector<uv_buf_t> m_buffers;
     };
 
     //netWorking
@@ -124,4 +132,5 @@ private:
     void sendPong();
 
     void inter_send(WriteCtx* ctx, uint8_t opcode);
+    void inter_sendFile(FileReader* reader);
 };

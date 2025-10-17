@@ -89,7 +89,6 @@ private:
     httpStatus m_status;
     headerMap m_headers;
     std::string m_version;
-    int m_content_length;
     uv_stream_t *m_client;
     std::string m_url;
     std::string m_filePath;
@@ -107,7 +106,7 @@ private:
     std::string m_head;
 
     std::vector<uv_buf_t> m_buffers;
-
+    FileReader* m_reader;
     /*
      * 写入完成回调
      */
@@ -117,8 +116,6 @@ private:
      * 内部发送请求
      */
     void send();
-    // 发送文件
-    void send(FileReader* reader);
 
     void initReader(FileReader* reader);
     void sendErr();

@@ -51,35 +51,16 @@ httpResp::httpResp(std::shared_ptr<T> ctx)
 
 void httpResp::initReader(FileReader* reader)
 {
-    reader->onOpen([](FileReader* reader)
-    {
-       if (reader->getResult() < 0)
-       {
-           std::cerr << "send file error" << std::endl;
-       }
-    });
-    reader->onRead([](FileReader* reader)
-    {
-        if (reader->getResult() < 0)
-        {
-            std::cerr << "send file error" << std::endl;
-        }
-    });
-
     auto self = shared_from_this();
+    reader->onError([self](FileReader* reader)
+    {
+        std::cerr << "FileReader: Error" << std::endl;
+        self->sendErr();
+        delete reader;
+    });
     reader->onClose([self](FileReader* reader)
     {
-        if (reader->getResult() < 0)
-        {
-            std::cerr << "send file error"<< std::endl;
-            self->sendErr();
-        } else
-        {
-            //todo
-            self->send(reader);
-        }
-
-        delete reader;
+        self->send();
     });
 }
 
@@ -94,9 +75,9 @@ void httpResp::sendFile(const std::string& path)
     m_filePath = path;
     m_sendType = SendType::FILE;
     // read file
-    auto reader = new FileReader(m_client->loop);
-    initReader(reader);
-    reader->fileRead(m_filePath);
+    m_reader = new FileReader(m_client->loop);
+    initReader(m_reader);
+    m_reader->fileRead(m_filePath);
 }
 
 void httpResp::sendJson(const lept_value& json)
@@ -135,42 +116,26 @@ void httpResp::send()
         m_head.append(header.first + ": " + header.second + "\r\n");
     }
 
-    m_head.append("Content-Length: " + std::to_string(m_body.size()) + "\r\n");
-    m_head.append("\r\n");
-
-    m_buffers.clear();
-    m_buffers.push_back(uv_buf_init(const_cast<char*>(m_head.c_str()), m_head.size()));
-
-    m_buffers.push_back(uv_buf_init(const_cast<char*>(m_body.c_str()), m_body.size()));
-
-
-    auto ctx = new WriteContext();
-    ctx->req.data = ctx;
-    ctx->resp = this->shared_from_this();
-
-    uv_write(&ctx->req, m_client,
-             m_buffers.data(),
-             m_buffers.size(),
-             onWriteEnd);
-}
-
-void httpResp::send(FileReader* reader)
-{
-    m_head = "HTTP/1.1 " + httpStatus_str(m_status) + "\r\n";
-    for (const auto& header : m_headers)
+    if (m_sendType == SendType::FILE)
     {
-        m_head.append(header.first + ": " + header.second + "\r\n");
+        m_head.append("Content-Length: " + std::to_string(m_reader->getReadByte()) + "\r\n");
+    } else
+    {
+        m_head.append("Content-Length: " + std::to_string(m_body.size()) + "\r\n");
     }
 
-    m_head.append("Content-Length: " + std::to_string(reader->getReadByte()) + "\r\n");
-
     m_head.append("\r\n");
 
     m_buffers.clear();
     m_buffers.push_back(uv_buf_init(const_cast<char*>(m_head.c_str()), m_head.size()));
 
-    reader->appendToBuff(m_buffers);
-
+    if (m_sendType == SendType::FILE)
+    {
+        m_reader->appendToBuff(m_buffers);
+    } else
+    {
+        m_buffers.push_back(uv_buf_init(const_cast<char*>(m_body.c_str()), m_body.size()));
+    }
 
     auto ctx = new WriteContext();
     ctx->req.data = ctx;
@@ -193,6 +158,10 @@ void httpResp::onWriteEnd(uv_write_t *req, int status)
     }
 
     auto ctx = static_cast<WriteContext*>(req->data);
+    if (ctx->resp->m_sendType == SendType::FILE)
+    {
+        delete ctx->resp->m_reader;
+    }
     if (ctx->resp->m_onSent)
     {
         ctx->resp->m_onSent(ctx->resp.get());
@@ -217,6 +186,8 @@ void httpResp::clearContent()
 
 void httpResp::sendErr()
 {
+    m_body.clear();
+    m_headers.clear();
     setStatus(httpStatus::INTERNAL_SERVER_ERROR);
     sendStr(httpStatus_str(httpStatus::INTERNAL_SERVER_ERROR));
 }

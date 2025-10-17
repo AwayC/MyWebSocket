@@ -6,6 +6,7 @@
 #include "WsServer.h"
 #include <cassert>
 #include <WsServer.h>
+#include "FileReader.h"
 #define WS_CALLBACK(cb, ...) do { \
         if(cb) { \
             cb(__VA_ARGS__); \
@@ -192,8 +193,17 @@ void WsSession::inter_send(WriteCtx* ctx, uint8_t opcode)
     header.clear();
     header.emplace_back(0x80 | opcode);
     uint8_t mask = 0x00;
+    FileReader* reader = ctx->m_reader;
     // 发送数据长度
-    size_t payload_len = ctx->m_str.size();
+    size_t payload_len;
+    if (ctx->isFile)
+    {
+        payload_len = reader->getReadByte();
+    } else
+    {
+        payload_len = ctx->m_str.size();
+    }
+
     if (payload_len < 126)
     {
         header.emplace_back(static_cast<uint8_t>(payload_len | mask));
@@ -213,16 +223,23 @@ void WsSession::inter_send(WriteCtx* ctx, uint8_t opcode)
         }
     }
 
-    ctx->buf[0] = uv_buf_init(header.data(), header.size());
+    ctx->m_buffers.push_back(uv_buf_init(header.data(), header.size()));
 
     // 发送数据
-    ctx->buf[1] = uv_buf_init(ctx->m_str.data(),
-                                    ctx->m_str.size());
+    if (ctx->isFile)
+    {
+        reader->appendToBuff(ctx->m_buffers);
+    } else
+    {
+        ctx->m_buffers.push_back(uv_buf_init(ctx->m_str.data(),
+                                    ctx->m_str.size()));
+    }
 
     ctx->req.data = ctx;
     uv_write(&ctx->req,
                 m_client,
-                ctx->buf, 2,
+                ctx->m_buffers.data(),
+                ctx->m_buffers.size(),
                 [](uv_write_t* req, int status)
     {
         if (status < 0)
@@ -234,9 +251,32 @@ void WsSession::inter_send(WriteCtx* ctx, uint8_t opcode)
     });
 }
 
+
 void WsSession::sendPong()
 {
     auto *ctx = new WriteCtx();
     ctx->setMsg("");
     inter_send(ctx, WS_PONG);
 }
+
+void WsSession::sendFile(const std::string& path)
+{
+    auto reader = new FileReader(m_loop);
+    auto self = shared_from_this();
+
+    reader->onError([](FileReader* ins)
+    {
+        std::cerr << "FileReader: Error" << std::endl;
+        delete ins;
+    });
+    reader->onClose([self](FileReader* ins)
+    {
+        auto ctx = new WriteCtx();
+        ctx->setMsg(ins);
+        self->inter_send(ctx, WS_TEXT);
+    });
+    reader->fileRead(path);
+}
+
+
+
