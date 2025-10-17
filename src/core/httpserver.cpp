@@ -14,7 +14,6 @@
 /************* Session *************/
 HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(client)
 {
-    m_resp = nullptr;
     m_owner = owner;
     m_recvBuf = uv_buf_init(new char[HTTP_DEFAULT_RECV_BUF_SIZE],
                                 HTTP_DEFAULT_RECV_BUF_SIZE);
@@ -41,28 +40,32 @@ HttpServer::Session::~Session()
 {
     delete[] m_recvBuf.base;
     std::cout << "session destroyed" << std::endl;
-};
+}
 
-void HttpServer::Session::init()
+std::shared_ptr<httpResp> HttpServer::Session::initResp()
 {
     auto self = shared_from_this();
-    m_resp = httpResp::create(self);
-    m_resp->onSent([self](httpResp* resp)
+    auto resp = httpResp::create(self);
+    std::weak_ptr<Session> weakSelf = self;
+    resp->onSent([weakSelf](httpResp* resp)
     {
-        if (needKeepConnection(&self->m_req))
+        if (auto self = weakSelf.lock())
         {
-            //keep alive
-            std::cout << "keep alive connection" << std::endl;
-            self->m_isKeepAlive = true;
-            self->startKeepAliveTimer();
-        } else
-        {
-            std::cout << "close connection" << std::endl;
-            self->close();
+            if (self->m_isKeepAlive == true)
+            {
+                //keep alive
+                std::cout << "keep alive connection" << std::endl;
+                self->startKeepAliveTimer();
+            } else
+            {
+                std::cout << "close connection" << std::endl;
+                self->close();
+            }
         }
-        resp->clearContent();
     });
-    m_resp->init();
+
+    std::cout << "shared count" << resp.use_count() << std::endl;
+    return resp;
 }
 
 bool HttpServer::Session::needKeepConnection (httpReq* req)
@@ -138,27 +141,30 @@ void HttpServer::Session::recv_cb(uv_stream_t* client,
 
 void HttpServer::Session::handle_request()
 {
+    auto resp = initResp();
     if (m_parser.upgrade)
     {
         //todo: upgrade to websocket
-        upgradeToWs();
+        upgradeToWs(resp);
 
     } else
     {
+        m_isKeepAlive = needKeepConnection(&m_req);
         if (m_req.method == HTTP_GET)
         {
-            m_owner->handle_get(&m_req, m_resp.get());
+            m_owner->handle_get(&m_req, resp);
         } else if (m_req.method == HTTP_POST)
         {
-            m_owner->handle_post(&m_req, m_resp.get());
+            m_owner->handle_post(&m_req, resp);
         } else
         {
             if (m_owner->onRequestCb)
-                m_owner->onRequestCb(&m_req, m_resp.get());
+                m_owner->onRequestCb(&m_req, resp);
             else
-                m_owner->handle_errReq(&m_req, m_resp.get());
+                m_owner->handle_errReq(&m_req, resp);
         }
     }
+    std::cout << "shared count" << resp.use_count() << std::endl;
 }
 
 
@@ -248,23 +254,24 @@ int HttpServer::Session::onReqBody(http_parser* parser, const char* at, size_t l
     return 0;
 }
 
-void HttpServer::Session::upgradeToWs()
+void HttpServer::Session::upgradeToWs(httpRespPtr resp)
 {
-    m_resp->setStatus(httpStatus::SWITCHING_PROTOCOLS);
-    m_resp->setHeader("Upgrade", "websocket");
-    m_resp->setHeader("Connection", "Upgrade");
+    resp->setStatus(httpStatus::SWITCHING_PROTOCOLS);
+    resp->setHeader("Upgrade", "websocket");
+    resp->setHeader("Connection", "Upgrade");
 
     std::string client_key = m_req.headers["Sec-WebSocket-Key"];
     std::string accept_key = WsUtil::calculate_accept_key(client_key);
-    m_resp->setHeader("Sec-WebSocket-Accept", accept_key);
-
-    auto self = shared_from_this( );
-    m_resp->onSent([self](httpResp* resp){
-        assert(self != nullptr);
-        self->m_owner->upgradeSession(self);
-        std::cout << "upgrade to websocket session" << std::endl;
+    resp->setHeader("Sec-WebSocket-Accept", accept_key);
+    std::weak_ptr<Session> weak_self = shared_from_this( );
+    resp->onSent([weak_self](httpResp* resp){
+        if (auto self = weak_self.lock())
+        {
+            self->m_owner->upgradeSession(self);
+            std::cout << "upgrade to websocket session" << std::endl;
+        }
     });
-    m_resp->sendStr("");
+    resp->sendStr("");
 
 }
 
@@ -281,7 +288,6 @@ void HttpServer::Session::transferBufferToWsSession(uv_buf_t* buf)
 void HttpServer::handle_connect(uv_stream_t* client)
 {
     auto ss = Session::create(client, this);
-    ss->init();
 
     std::cout << "handle request" << std::endl;
     client->data = ss.get();
@@ -372,17 +378,19 @@ void HttpServer::inter_on_connect(uv_stream_t *server, int status)
     }
 }
 
-void HttpServer::post(const std::string& url, const std::function<void(httpReq*, httpResp*)>& callback)
+void HttpServer::post(const std::string& url,
+                     const std::function<void(httpReq*, httpRespPtr)>& callback)
 {
     post_callbacks.insert(std::make_pair(url, callback));
 }
 
-void HttpServer::get(const std::string& url, const std::function<void(httpReq*, httpResp*)>& callback)
+void HttpServer::get(const std::string& url,
+                    const std::function<void(httpReq*, httpRespPtr)>& callback)
 {
     get_callbacks.insert(std::make_pair(url, callback));
 }
 
-void HttpServer::handle_post(httpReq* req, httpResp* resp)
+void HttpServer::handle_post(httpReq* req, httpRespPtr resp)
 {
     auto it = post_callbacks.find(req->url);
     if (it != post_callbacks.end())
@@ -394,7 +402,7 @@ void HttpServer::handle_post(httpReq* req, httpResp* resp)
     }
 }
 
-void HttpServer::handle_get(httpReq* req, httpResp* resp)
+void HttpServer::handle_get(httpReq* req, httpRespPtr resp)
 {
     auto it = get_callbacks.find(req->url);
     if (it != get_callbacks.end())
@@ -406,7 +414,7 @@ void HttpServer::handle_get(httpReq* req, httpResp* resp)
     }
 }
 
-void HttpServer::handle_errReq(httpReq* req, httpResp* resp)
+void HttpServer::handle_errReq(httpReq* req, httpRespPtr resp)
 {
     resp->setStatus(httpStatus::NOT_FOUND);
     resp->sendStr("404 Not Found");
@@ -418,7 +426,7 @@ void HttpServer::onConnect(const std::function<void(uv_tcp_t* client)>& callback
     onConnectCb = callback;
 }
 
-void HttpServer::onRequest(const std::function<void(httpReq*, httpResp*)>& callback)
+void HttpServer::onRequest(const std::function<void(httpReq*, httpRespPtr)>& callback)
 {
     onRequestCb = callback;
 }
@@ -441,7 +449,6 @@ void HttpServer::closeSession(const SessionPtr &session, bool isUpgrade)
         });
     }
 
-    session->m_resp->onSent(nullptr);
     removeSession(session);
     std::cout << "close session" << std::endl;
 

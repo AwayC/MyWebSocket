@@ -70,7 +70,7 @@ struct WsFrame
     bool mask{}; // MASK 位
     size_t payload_len{}; // 有效载荷长度
     std::vector<uint8_t> mask_key; // 掩码密钥
-    WsParseBuf& payload; // 解析缓冲区
+    WsParseBuf payload; // 解析缓冲区
 
 };
 

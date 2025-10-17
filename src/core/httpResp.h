@@ -57,8 +57,6 @@ public:
         return std::make_shared<httpResp>(ctx);
     }
 
-    void init();
-
     /*
      * 用户发送方法
      */
@@ -106,7 +104,6 @@ private:
     };
 
     SendType m_sendType;
-    FileReader m_reader;
     std::string m_head;
 
     std::vector<uv_buf_t> m_buffers;
@@ -120,7 +117,11 @@ private:
      * 内部发送请求
      */
     void send();
+    // 发送文件
+    void send(FileReader* reader);
 
+    void initReader(FileReader* reader);
+    void sendErr();
 
 };
 

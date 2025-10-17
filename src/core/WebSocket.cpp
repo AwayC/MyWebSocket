@@ -6,7 +6,6 @@
 #include "WsServer.h"
 #include <cassert>
 #include <WsServer.h>
-
 #define WS_CALLBACK(cb, ...) do { \
         if(cb) { \
             cb(__VA_ARGS__); \
@@ -17,9 +16,9 @@
 WsSession::WsSession(const HttpServer::SessionPtr& session, WsServer* owner) :
     m_client(session->getClient()),
     m_loop(session->getLoop()),
-    m_owner(owner),
-    m_frame()
+    m_owner(owner)
 {
+    // recvBuf 继承自 httpSession
     session->transferBufferToWsSession(&m_recvBuf);
     readyState = WsStatus::CLOSED;
 

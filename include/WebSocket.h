@@ -8,6 +8,7 @@
 #include "../src/core/websocket_parser.h"
 #include "leptjson.h"
 
+#define WSSESSION_ALLOC_SIZE 32
 enum class WsStatus {
     CONNECTING,
     OPEN,

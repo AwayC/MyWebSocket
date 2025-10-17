@@ -30,6 +30,9 @@ struct httpReq
 
 };
 
+using httpReqPtr = std::shared_ptr<httpReq>;
+using httpRespPtr = std::shared_ptr<httpResp>;
+
 class HttpServer : public std::enable_shared_from_this<HttpServer> {
 public:
     explicit HttpServer(const std::string& ip, int port = HTTP_DEFAULT_PORT);
@@ -48,8 +51,8 @@ public:
     /*
      * post和get请求的回调设置
      */
-    void post(const std::string& url, const std::function<void(httpReq*, httpResp*)>& callback);
-    void get(const std::string& url, const std::function<void(httpReq*, httpResp* )>& callback);
+    void post(const std::string& url, const std::function<void(httpReq*, httpRespPtr)>& callback);
+    void get(const std::string& url, const std::function<void(httpReq*, httpRespPtr)>& callback);
 
     /*
      * 设置长连接时间
@@ -59,7 +62,7 @@ public:
     /*
      * 其他回调设置
      */
-    void onRequest(const std::function<void(httpReq*, httpResp*)>& callback);
+    void onRequest(const std::function<void(httpReq*, httpRespPtr)>& callback);
     void onConnect(const std::function<void(uv_tcp_t* client)>& callback);
 
     struct Session;
@@ -88,7 +91,6 @@ public:
          * 请求响应
          */
         httpReq m_req;
-        std::shared_ptr<httpResp> m_resp;
 
         uv_buf_t m_recvBuf;
 
@@ -129,7 +131,7 @@ public:
         /*
          * 初始化会话
          */
-        void init();
+        httpRespPtr initResp();
         void handle_request();
 
         /*
@@ -154,7 +156,7 @@ public:
         /*
          * 升级到websocket
          */
-        void upgradeToWs();
+        void upgradeToWs(httpRespPtr resp);
 
         /*
          * 转移buffer到websocket会话
@@ -177,25 +179,25 @@ private:
     std::vector<SessionPtr> m_sessions;
 
     std::function<void(uv_tcp_t* client)> onConnectCb;
-    std::function<void(httpReq*, httpResp*)> onRequestCb;
+    std::function<void(httpReq*, httpRespPtr)> onRequestCb;
     std::function<void(std::shared_ptr<Session>)> onUpgradeCb;
 
-    std::unordered_map<std::string, std::function<void(httpReq*, httpResp*)>> post_callbacks;
-    std::unordered_map<std::string, std::function<void(httpReq*, httpResp*)>> get_callbacks;
+    std::unordered_map<std::string, std::function<void(httpReq*, httpRespPtr)>> post_callbacks;
+    std::unordered_map<std::string, std::function<void(httpReq*, httpRespPtr)>> get_callbacks;
 
     /*
      * 内部事件处理
      */
     static void inter_on_connect(uv_stream_t *server, int status);
     void handle_connect(uv_stream_t *client);
-    void handle_post(httpReq* req, httpResp* resp);
-    void handle_get(httpReq* req, httpResp* resp);
+    void handle_post(httpReq* req, httpRespPtr resp);
+    void handle_get(httpReq* req, httpRespPtr resp);
     size_t getSessionCount() const
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_sessions.size();
     }
-    static void handle_errReq(httpReq* req, httpResp* resp);
+    static void handle_errReq(httpReq* req, httpRespPtr resp);
 
     /**
      * 关闭会话

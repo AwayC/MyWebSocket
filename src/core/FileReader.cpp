@@ -93,7 +93,7 @@ void FileReader::onOpen(uv_fs_t* req)
 
 void FileReader::onClose(uv_fs_t* req)
 {
-    std::cerr << "file close success" << std::endl;
+    std::cout << "file close success" << std::endl;
     uv_fs_req_cleanup(req);
     FileReader* self = static_cast<FileReader*>(req->data);
     assert(self != nullptr);

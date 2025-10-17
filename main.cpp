@@ -16,7 +16,7 @@ int main() {
     {
         std::cout << "onConnect" << std::endl;
     });
-    svr->get("/", [](httpReq* req, httpResp* resp)
+    svr->get("/", [](httpReq* req, httpRespPtr resp)
     {
         static int cnt = 0;
         std::cout << "onRequest" << std::endl;
@@ -41,7 +41,7 @@ int main() {
             }
             break;
         case 0:
-            resp->sendFile("/Users/away/Desktop/codes/MyWebsocket/index.html");
+            resp->sendFile("./index.html");
             break;
         default:
             resp->sendStr("hello world");

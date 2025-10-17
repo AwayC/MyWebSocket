@@ -78,6 +78,7 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
         }
 
         case Status::payloadLenAndMask:
+        {
             frame->mask = mask = GET_MASK(*ch);
             frame->payload_len = GET_PAYLOAD_LEN(*ch);
 
@@ -96,8 +97,10 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
                 m_byteNeed = 8;
             }
             break ;
+        }
 
         case Status::payloadLen:
+        {
             if (m_byteNeed)
             {
                 frame->payload_len = (frame->payload_len << 1) + (*ch);
@@ -109,20 +112,23 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
             }
             break ;
 
-        case Status::maskKey:
-            if (m_byteNeed)
-            {
-                frame->mask_key.push_back(*ch);
-                m_byteNeed --;
-            }
+            case Status::maskKey:
+                if (m_byteNeed)
+                {
+                    frame->mask_key.push_back(*ch);
+                    m_byteNeed --;
+                }
             if (!m_byteNeed)
             {
                 m_status = Status::maskKey;
             }
             break ;
+        }
+
         case Status::payload:
+        {
             size_t to_read = std::min(static_cast<size_t>(data_ + len - ch),
-                                        frame->payload_len);
+                                    frame->payload_len);
             if (mask)
             {
                 for (size_t i = 0;i < to_read;i ++)
@@ -146,7 +152,10 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
                 ch --;
             }
             break ;
+        }
+
         case Status::complete:
+        {
             m_maskIndex = 0;
             m_byteNeed = 0;
             m_status = Status::finAndOpcode;
@@ -161,6 +170,8 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
                 m_isContinuation = true;
             }
             break ;
+        }
+
         }
     }
 
