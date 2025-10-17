@@ -7,16 +7,26 @@
 #include <cassert>
 #include <WsServer.h>
 
+#define WS_CALLBACK(cb, ...) do { \
+        if(cb) { \
+            cb(__VA_ARGS__); \
+        } \
+    } while (0)
+
+
 WsSession::WsSession(const HttpServer::SessionPtr& session, WsServer* owner) :
     m_client(session->getClient()),
     m_loop(session->getLoop()),
     m_owner(owner),
-    m_decodeData(WsParseBuf()), m_write_ctx(),
-    m_parser(m_decodeData)
+    m_frame()
 {
     session->transferBufferToWsSession(&m_recvBuf);
     readyState = WsStatus::CLOSED;
 
+    m_parser.onComplete([this]()
+    {
+        this->handleWsFrame();
+    });
     std::cout << "websocket session created" << std::endl;
 }
 
@@ -36,10 +46,7 @@ void WsSession::connect()
     std::cout << "websocket session start read" << std::endl;
 
     readyState = WsStatus::OPEN;
-    if (m_onConnectCb)
-    {
-        m_onConnectCb(shared_from_this());
-    }
+    WS_CALLBACK(m_onConnectCb, shared_from_this());
 
 }
 
@@ -59,10 +66,7 @@ void WsSession::close()
 
     m_owner->removeWsSession(shared_from_this());
 
-    if (m_onCloseCb)
-    {
-        m_onCloseCb(shared_from_this());
-    }
+    WS_CALLBACK(m_onCloseCb, shared_from_this());
 
     std::cout << "close websocket Session" << std::endl;
 }
@@ -119,40 +123,34 @@ void WsSession::recv_cb(uv_stream_t* stream,
 void WsSession::handleMessage(size_t nread)
 {
     std::cout << "websocket session handle message" << std::endl;
-    WsParseErr err = m_parser.parse(m_recvBuf, nread);
+    WsParseErr err = m_parser.parse(m_recvBuf, &m_frame);
 
-    std::cout << "websocket parsed " << static_cast<int>(err) << std::endl;
-    if (err == WsParseErr::NOT_COMPLETED)
-        return ;
     if (err != WsParseErr::SUCCESS)
     {
-        if (m_onErrorCb)
-        {
-            m_onErrorCb(shared_from_this());
-        }
-        return ;
-    }
-
-    int opcode = m_parser.getOpcode();
-    std::cout << "opcode " << opcode << std::endl;
-    if (opcode == WS_CLOSE)
-    {
+        std::cerr << "websocket session parse err: " << WsErr_Str(err) << std::endl;
+        WS_CALLBACK(m_onErrorCb, shared_from_this());
         close();
         return ;
     }
-    if (opcode == WS_PING)
+}
+
+void WsSession::handleWsFrame()
+{
+    switch (m_frame.opcode)
     {
-        sendPong();
-        return ;
+        case WS_PING:
+            sendPing();
+            break;
+        case WS_PONG:
+            break;
+        case WS_CLOSE:
+            close();
+            break;
+        default:
+            WS_CALLBACK(m_onMessageCb, shared_from_this());
+            break;
     }
 
-    if (m_onMessageCb)
-    {
-        std::cout << "onMessage" << std::endl;
-        m_write_ctx.clearMsg();
-        m_onMessageCb(shared_from_this());
-        inter_send(WS_TEXT);
-    }
 }
 
 lept_value WsSession::getJsonMessage()
@@ -169,30 +167,34 @@ lept_value WsSession::getJsonMessage()
 
 void WsSession::send(const lept_value& json)
 {
-    m_write_ctx.setMsg(json.stringify());
+    auto *ctx = new WriteCtx();
+    ctx->setMsg(json.stringify());
+    inter_send(ctx, WS_TEXT);
 }
 
 void WsSession::send(const std::string& str)
 {
-    m_write_ctx.setMsg(str);
+    auto *ctx = new WriteCtx();
+    ctx->setMsg(str);
+    inter_send(ctx, WS_TEXT);
 }
 
 void WsSession::send(const char* str)
 {
-    m_write_ctx.setMsg(std::string(str));
+    this->send(std::string(str));
 }
 
-void WsSession::inter_send(uint8_t opcode)
+void WsSession::inter_send(WriteCtx* ctx, uint8_t opcode)
 {
     std::cout << "ws session inter send" << std::endl;
     // 发送帧头
 
-    std::vector<char>& header = m_write_ctx.m_head;
+    std::vector<char>& header = ctx->m_head;
     header.clear();
     header.emplace_back(0x80 | opcode);
     uint8_t mask = 0x00;
     // 发送数据长度
-    int payload_len = m_write_ctx.m_str.size();
+    size_t payload_len = ctx->m_str.size();
     if (payload_len < 126)
     {
         header.emplace_back(static_cast<uint8_t>(payload_len | mask));
@@ -212,25 +214,30 @@ void WsSession::inter_send(uint8_t opcode)
         }
     }
 
-    m_write_ctx.buf[0] = uv_buf_init(header.data(), header.size());
+    ctx->buf[0] = uv_buf_init(header.data(), header.size());
 
     // 发送数据
-    m_write_ctx.buf[1] = uv_buf_init(m_write_ctx.m_str.data(),
-                                    m_write_ctx.m_str.size());
-    uv_write(&m_write_ctx.req,
+    ctx->buf[1] = uv_buf_init(ctx->m_str.data(),
+                                    ctx->m_str.size());
+
+    ctx->req.data = ctx;
+    uv_write(&ctx->req,
                 m_client,
-                m_write_ctx.buf, 2,
+                ctx->buf, 2,
                 [](uv_write_t* req, int status)
     {
         if (status < 0)
         {
             std::cerr << "websocket send err: " << uv_err_name(status) << std::endl;
         }
+
+        delete static_cast<WriteCtx*>(req->data);
     });
 }
 
 void WsSession::sendPong()
 {
-    send(getStrMessage());
-    inter_send(WS_PONG);
+    auto *ctx = new WriteCtx();
+    ctx->setMsg("");
+    inter_send(ctx, WS_PONG);
 }

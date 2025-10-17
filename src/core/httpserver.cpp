@@ -187,6 +187,13 @@ void HttpServer::Session::stopKeepAliveTimer()
 int HttpServer::Session::onReqMessageBegin(http_parser* parser)
 {
     std::cout << "onReqMessageBegin" << std::endl;
+    auto ep = static_cast<Session*>(parser->data);
+
+    // reset
+    ep->m_req.headers.clear();
+    ep->m_req.body.clear();
+    ep->m_req.url.clear();
+
     return 0;
 }
 

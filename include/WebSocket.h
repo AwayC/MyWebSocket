@@ -62,7 +62,7 @@ public:
 
     std::string getStrMessage()
     {
-        return {m_decodeData.begin(), m_decodeData.end()};
+        return {m_frame.payload.begin(), m_frame.payload.end()};
     }
 
     lept_value getJsonMessage();
@@ -79,7 +79,7 @@ private:
     WsStatus readyState;
 
     websocket_parser m_parser;
-    std::vector<uint8_t> m_decodeData;
+    WsFrame m_frame;
 
     struct WriteCtx
     {
@@ -99,7 +99,7 @@ private:
         }
         uv_write_t req;
         uv_buf_t buf[2];
-    } m_write_ctx;
+    };
 
     //netWorking
     std::function<void(WsSessionPtr)> m_onConnectCb;
@@ -118,8 +118,9 @@ private:
                         const uv_buf_t* buf);
 
     void handleMessage(size_t nread);
+    void handleWsFrame();
 
     void sendPong();
 
-    void inter_send(uint8_t opcode);
+    void inter_send(WriteCtx* ctx, uint8_t opcode);
 };

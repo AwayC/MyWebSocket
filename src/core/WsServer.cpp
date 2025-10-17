@@ -6,6 +6,13 @@
 
 #include <utility>
 
+#define WS_CALLBACK(cb, ...) do { \
+        if(cb) { \
+            cb(__VA_ARGS__); \
+        } \
+    } while (0)
+
+
 WsServer::WsServer(const std::shared_ptr<HttpServer> &httpServer)
 {
     m_httpSvr = httpServer;
@@ -29,10 +36,7 @@ void WsServer::onUpgrade(const std::shared_ptr<HttpServer::Session> &session)
     std::cout << "ws server upgrade" << std::endl;
     auto ws = std::make_shared<WsSession>(session, this);
     pushWsSession(ws);
-    if (m_onConnectCb)
-    {
-        m_onConnectCb(ws);
-    }
+    WS_CALLBACK(m_onConnectCb, ws);
     ws->connect();
 }
 

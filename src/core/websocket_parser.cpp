@@ -47,7 +47,7 @@ std::string WsErr_Str(WsParseErr err)
 WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
 {
     const char* data_ = data.base;
-    int len = data.len;
+    size_t len = data.len;
     m_frame = frame;
     const char* ch;
     bool mask = false;
@@ -61,16 +61,21 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
     {
         switch (m_status)
         {
-        case Status::finAndOpcode:
+        case Status::finAndOpcode: {
             frame->fin = GET_FIN(*ch);
             frame->rsv = GET_RSV(*ch);
-            if (!m_isContinuation)
+            int opcode = GET_OPCODE(*ch);
+            if (!m_isContinuation && opcode)
             {
-                frame->opcode = GET_OPCODE(*ch);
+                frame->opcode = opcode;
+                //reset
+                frame->mask_key.clear();
+                frame->payload.clear();
             }
 
             m_status = Status::payloadLenAndMask;
             break ;
+        }
 
         case Status::payloadLenAndMask:
             frame->mask = mask = GET_MASK(*ch);
