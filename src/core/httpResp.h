@@ -61,6 +61,7 @@ public:
      * 用户发送方法
      */
     void sendStr(const std::string& str);
+    void sendStr(std::string&& str);
     void sendJson(const lept_value& json);
     void sendFile(const std::string& path);
 

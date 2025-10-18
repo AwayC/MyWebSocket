@@ -39,15 +39,14 @@ std::string WsErr_Str(WsParseErr err)
 
 
 #define GET_FIN(ch)             ((ch) & 0x80)
-#define GET_RSV(ch)             (((ch) & 0x40) >> 4)
+#define GET_RSV(ch)             (((ch) & 0x70) >> 4)
 #define GET_OPCODE(ch)          ((ch) & 0x0F)
 #define GET_MASK(ch)            ((ch) & 0x80)
 #define GET_PAYLOAD_LEN(ch)     ((ch) & 0x7F)
 
-WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
+WsParseErr websocket_parser::parse(const uv_buf_t& data, size_t len, WsFrame* frame)
 {
     const char* data_ = data.base;
-    size_t len = data.len;
     m_frame = frame;
     const char* ch;
     bool mask = false;
@@ -111,16 +110,19 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
                 SWITCH_TO_MASK(frame);
             }
             break ;
+        }
 
-            case Status::maskKey:
-                if (m_byteNeed)
-                {
-                    frame->mask_key.push_back(*ch);
-                    m_byteNeed --;
-                }
+        case Status::maskKey:
+        {
+            if (m_byteNeed)
+            {
+                frame->mask_key.push_back(*ch);
+                m_byteNeed --;
+            }
             if (!m_byteNeed)
             {
-                m_status = Status::maskKey;
+                m_byteNeed = frame->payload_len;
+                m_status = Status::payload;
             }
             break ;
         }
@@ -133,7 +135,7 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
             {
                 for (size_t i = 0;i < to_read;i ++)
                 {
-                    frame->payload.emplace_back((*(ch + i)) ^ frame->mask_key[m_maskIndex]);
+                    frame->payload.push_back((*(ch + i)) ^ frame->mask_key[m_maskIndex]);
                     m_maskIndex = (m_maskIndex + 1) % 4;
                 }
             } else
@@ -149,9 +151,10 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
             if (!m_byteNeed)
             {
                 m_status = Status::complete;
-                ch --;
+            } else
+            {
+                break ;
             }
-            break ;
         }
 
         case Status::complete:
@@ -182,6 +185,7 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, WsFrame* frame)
 websocket_parser::websocket_parser()
 {
     m_status = Status::finAndOpcode;
+    m_isContinuation = false;
     m_byteNeed = 1;
     m_maskIndex = 0;
 }

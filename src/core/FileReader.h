@@ -20,7 +20,7 @@ enum class FileReaderErr
 class FileReader
 {
 public:
-    void fileRead(std::string path);
+    void fileRead(const std::string& path);
     FileReaderErr getResult() const
     {
         return m_result;
@@ -37,7 +37,7 @@ public:
 
     void appendToBuff(std::vector<uv_buf_t>& buff);
 
-    FileReader(uv_loop_t* loop);
+    explicit FileReader(uv_loop_t* loop);
     ~FileReader();
 
 

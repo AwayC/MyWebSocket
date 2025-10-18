@@ -31,6 +31,7 @@ public:
 
     void send(const lept_value& json);
     void send(const std::string& str);
+    void send(std::string&& str);
     void send(const char* str);
     void sendFile(const std::string& path);
 
@@ -57,19 +58,18 @@ public:
         m_onErrorCb = callback;
     }
 
-    uv_stream_t* getClient()
+    uv_stream_t* getClient() const
     {
         return m_client;
     }
 
-    std::string getStrMessage()
+    std::string_view getStrMessage() const
     {
-        return {m_frame.payload.begin(), m_frame.payload.end()};
+        return {m_frame.payload.data(), m_frame.payload.size()};
     }
 
     lept_value getJsonMessage();
 
-    void sendPing();
 
 private:
     uv_loop_t* m_loop{};
@@ -90,6 +90,10 @@ private:
         void setMsg(const std::string& str)
         {
             m_str = str;
+        }
+        void setMsg(std::string&& str)
+        {
+            m_str = std::move(str);
         }
         void setMsg(const char* str)
         {

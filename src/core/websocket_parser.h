@@ -69,6 +69,8 @@ struct WsFrame
     uint8_t opcode{}; // 操作码
     bool mask{}; // MASK 位
     size_t payload_len{}; // 有效载荷长度
+
+
     std::vector<uint8_t> mask_key; // 掩码密钥
     WsParseBuf payload; // 解析缓冲区
 
@@ -81,7 +83,7 @@ public:
 
     websocket_parser();
     ~websocket_parser();
-    WsParseErr parse(const uv_buf_t& data, WsFrame* frame);
+    WsParseErr parse(const uv_buf_t& data, size_t len, WsFrame* frame);
 
     void onComplete(const WsParseComplete& cb)
     {

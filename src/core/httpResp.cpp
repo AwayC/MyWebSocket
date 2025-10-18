@@ -98,6 +98,14 @@ void httpResp::sendStr(const std::string& str)
     send();
 }
 
+void httpResp::sendStr(std::string&& str)
+{
+    m_body = std::move(str);
+    m_headers["Content-Type"] = "text/plain";
+    m_sendType = SendType::STR;
+    send();
+}
+
 void httpResp::setHeader(const std::string& key, const std::string& value)
 {
     m_headers[key] = value;

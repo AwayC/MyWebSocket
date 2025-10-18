@@ -43,7 +43,6 @@ void WsSession::connect()
     //重新开始监听
     m_client->data = this;
     uv_read_start(m_client, recv_alloc_cb, recv_cb);
-    std::cout << "websocket session start read" << std::endl;
 
     readyState = WsStatus::OPEN;
     WS_CALLBACK(m_onConnectCb, shared_from_this());
@@ -68,7 +67,6 @@ void WsSession::close()
 
     WS_CALLBACK(m_onCloseCb, shared_from_this());
 
-    std::cout << "close websocket Session" << std::endl;
 }
 
 void WsSession::recv_alloc_cb(uv_handle_t* handle,
@@ -98,7 +96,6 @@ void WsSession::recv_cb(uv_stream_t* stream,
 {
     WsSession* self = static_cast<WsSession*>(stream->data);
     assert(self != nullptr);
-    std::cout << "websocket session recv " << nread << " bytes" << std::endl;
 
     if (nread < 0)
     {
@@ -122,8 +119,7 @@ void WsSession::recv_cb(uv_stream_t* stream,
 
 void WsSession::handleMessage(size_t nread)
 {
-    std::cout << "websocket session handle message" << std::endl;
-    WsParseErr err = m_parser.parse(m_recvBuf, &m_frame);
+    WsParseErr err = m_parser.parse(m_recvBuf, nread, &m_frame);
 
     if (err != WsParseErr::SUCCESS)
     {
@@ -138,9 +134,6 @@ void WsSession::handleWsFrame()
 {
     switch (m_frame.opcode)
     {
-        case WS_PING:
-            sendPing();
-            break;
         case WS_PONG:
             break;
         case WS_CLOSE:
@@ -156,7 +149,7 @@ void WsSession::handleWsFrame()
 lept_value WsSession::getJsonMessage()
 {
     lept_value json;
-    int ret = json.parse(getStrMessage());
+    int ret = json.parse(std::string(getStrMessage()));
     if (ret != LEPT_PARSE_OK)
     {
         std::cerr << "websocket frame json parse error" << std::endl;
@@ -179,6 +172,13 @@ void WsSession::send(const std::string& str)
     inter_send(ctx, WS_TEXT);
 }
 
+void WsSession::send(std::string&& str)
+{
+    auto *ctx = new WriteCtx();
+    ctx->setMsg(std::move(str));
+    inter_send(ctx, WS_TEXT);
+}
+
 void WsSession::send(const char* str)
 {
     this->send(std::string(str));
@@ -186,7 +186,6 @@ void WsSession::send(const char* str)
 
 void WsSession::inter_send(WriteCtx* ctx, uint8_t opcode)
 {
-    std::cout << "ws session inter send" << std::endl;
     // 发送帧头
 
     std::vector<char>& header = ctx->m_head;

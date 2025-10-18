@@ -57,13 +57,13 @@ FileReader::~FileReader()
 }
 
 
-void FileReader::fileRead(std::string path)
+void FileReader::fileRead(const std::string& path)
 {
     m_open_req.data = this;
     m_read_req.data = this;
     m_close_req.data = this;
 
-    m_path = std::move(path);
+    m_path = path;
     m_buffUsed = 0;
     m_readByte = 0;
 

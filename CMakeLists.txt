@@ -55,3 +55,9 @@ add_executable(ws_server test/WsServer.cpp)
 target_link_libraries(ws_server
     websocket
 )
+
+#test ws parser
+add_executable(ws_parser test/test_ws_parser.cpp)
+target_link_libraries(ws_parser
+    websocket
+)
