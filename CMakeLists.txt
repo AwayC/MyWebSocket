@@ -26,6 +26,8 @@ add_library(websocket
     src/core/WsServer.cpp
     src/core/websocket_parser.cpp
     ${UTIL_DIR}
+    src/core/Router.cpp
+    src/core/Router.h
 )
 
 target_link_libraries(websocket PUBLIC
