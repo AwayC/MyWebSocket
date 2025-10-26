@@ -14,21 +14,12 @@
 #include "leptjson.h"
 #include "../src/core/httpResp.h"
 #include "../src/util/ssl.h"
+#include "../src/core/httpRouter.h"
 
 #define HTTP_DEFAULT_PORT 8081
 #define HTTP_DEFAULT_KEEP_ALIVE_TIMEOUT 20
 #define HTTP_DEFAULT_RECV_BUF_SIZE (1 << 16)
 
-struct httpReq
-{
-    std::string url ;
-    headerMap headers;
-    std::string body;
-    http_method method;
-
-    std::string version;
-
-};
 
 using httpReqPtr = std::shared_ptr<httpReq>;
 using httpRespPtr = std::shared_ptr<httpResp>;
@@ -172,7 +163,12 @@ private:
 
     int m_keepAliveTimeout;
 
-    /*
+    /**
+     *  Router
+     */
+    httpRouter m_router;
+
+    /**
      * 会话管理互斥锁
      */
     mutable std::mutex m_mutex;
@@ -182,16 +178,12 @@ private:
     std::function<void(httpReq*, httpRespPtr)> onRequestCb;
     std::function<void(std::shared_ptr<Session>)> onUpgradeCb;
 
-    std::unordered_map<std::string, std::function<void(httpReq*, httpRespPtr)>> post_callbacks;
-    std::unordered_map<std::string, std::function<void(httpReq*, httpRespPtr)>> get_callbacks;
-
     /*
      * 内部事件处理
      */
     static void inter_on_connect(uv_stream_t *server, int status);
     void handle_connect(uv_stream_t *client);
-    void handle_post(httpReq* req, httpRespPtr resp);
-    void handle_get(httpReq* req, httpRespPtr resp);
+
     size_t getSessionCount() const
     {
         std::lock_guard<std::mutex> lock(m_mutex);

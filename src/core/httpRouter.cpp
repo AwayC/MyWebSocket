@@ -2,11 +2,11 @@
 // Created by AWAY on 25-10-19.
 //
 
-#include "Router.h"
+#include "httpRouter.h"
 #include <iostream>
 #include <utility>
 
-void Router::addRoute(const std::string& method,
+void httpRouter::addRoute(http_method method,
             const std::string& pattern_template,
             RouterHandler handler)
 {
@@ -21,13 +21,17 @@ void Router::addRoute(const std::string& method,
     }
 }
 
-void Router::dispatch(const std::string& method, const std::string& path)
+RouterHandler httpRouter::dispatch(httpReq* req)
 {
+    http_method method = req->method;
+    size_t pos = req->url.find('?');
+    std::string path = pos == std::string::npos ? req->url : req->url.substr(0, pos);
+
     auto it = routes.find(method);
     if (it == routes.end())
     {
-        std::cerr << "no route found for method '" << method << "' and path '" << path << "'" << std::endl;
-        return;
+        std::cerr << "no route found for method '" << http_method_str(method) << "' and path '" << path << "'" << std::endl;
+        return nullptr;
     }
 
     const auto& method_routes = it->second;
@@ -37,15 +41,17 @@ void Router::dispatch(const std::string& method, const std::string& path)
     {
         if (std::regex_match(path, match_results, route.pattern))
         {
-            route.handler(match_results);
-            return ;
+            req->params = match_results;
+            return route.handler;
         }
     }
 
+    req->params = std::smatch();
     std::cerr << "404 Not Found" << std::endl;
+    return nullptr;
 }
 
-std::string Router::parse_path_to_regex(const std::string& path_template)
+std::string httpRouter::parse_path_to_regex(const std::string& path_template)
 {
     std::string  regex_str = path_template;
     /**

@@ -7,7 +7,7 @@
 #include "http_parser.h"
 #include <cstring>
 #include <iostream>
-#include <map>
+#include <unordered_map>
 #include "uv.h"
 #include "leptjson.h"
 #include <functional>
@@ -39,7 +39,7 @@ enum class httpStatus
 
 static std::string httpStatus_str(httpStatus status);
 
-using headerMap = std::map<std::string, std::string>;
+using headerMap = std::unordered_map<std::string, std::string>;
 using httpRespPtr = std::shared_ptr<httpResp>;
 
 class httpResp : public std::enable_shared_from_this<httpResp> {

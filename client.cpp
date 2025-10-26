@@ -41,7 +41,7 @@ int main() {
     printf("Successfully connected to server at %s:%d\n", SERVER_IP, SERVER_PORT);
 
 
-    const char *http_request = "GET / HTTP/1.1\r\n"
+    const char *http_request = "GET /id/123?name=away HTTP/1.1\r\n"
                                "Host: 127.0.0.1:8081\r\n"
                                "Connection: keep-alive\r\n"
                                "\r\n";

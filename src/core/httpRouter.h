@@ -9,24 +9,25 @@
 #include <functional>
 #include <regex> // 正则表达式
 #include <vector>
+#include "httpReq.h"
+#include "httpResp.h"
 
 
-using RouterHandler = std::function<void(const std::smatch&)>;
+using RouterHandler = std::function<void(httpReq*, httpRespPtr)>;
 
 struct Route {
     std::regex pattern;
     RouterHandler handler;
 };
 
-class Router
+class httpRouter
 {
 public:
-    void addRoute(const std::string& method,
+    void addRoute(http_method method,
                 const std::string& pattern_str,
                 RouterHandler handler);
 
-    void dispatch(const std::string& method,
-                const std::string& path);
+    RouterHandler dispatch(httpReq* req);
 
 private:
     // 解析路径模板为正则表达式
@@ -37,5 +38,5 @@ private:
      * key: method, "GET", "POST", etc.
      * value: vector of Route structs
      */
-    std::unordered_map<std::string, std::vector<Route>> routes;
+    std::unordered_map<http_method, std::vector<Route>> routes;
 };

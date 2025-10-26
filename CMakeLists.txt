@@ -22,12 +22,12 @@ add_library(websocket
     src/core/httpserver.cpp
     src/core/httpResp.cpp
     src/core/FileReader.cpp
+    src/core/httpReq.cpp
     src/core/WebSocket.cpp
     src/core/WsServer.cpp
     src/core/websocket_parser.cpp
     ${UTIL_DIR}
-    src/core/Router.cpp
-    src/core/Router.h
+    src/core/httpRouter.cpp
 )
 
 target_link_libraries(websocket PUBLIC
@@ -62,4 +62,10 @@ target_link_libraries(ws_server
 add_executable(ws_parser test/test_ws_parser.cpp)
 target_link_libraries(ws_parser
     websocket
+)
+
+#test http router
+add_executable(http_router test/test_router.cpp)
+target_link_libraries(http_router
+        websocket
 )

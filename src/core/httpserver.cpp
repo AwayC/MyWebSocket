@@ -146,22 +146,15 @@ void HttpServer::Session::handle_request()
     {
         //todo: upgrade to websocket
         upgradeToWs(resp);
-
     } else
     {
-        m_isKeepAlive = needKeepConnection(&m_req);
-        if (m_req.method == HTTP_GET)
+        auto handler = m_owner->m_router.dispatch(&m_req);
+        if (handler != nullptr)
         {
-            m_owner->handle_get(&m_req, resp);
-        } else if (m_req.method == HTTP_POST)
-        {
-            m_owner->handle_post(&m_req, resp);
+            handler(&m_req, resp);
         } else
         {
-            if (m_owner->onRequestCb)
-                m_owner->onRequestCb(&m_req, resp);
-            else
-                m_owner->handle_errReq(&m_req, resp);
+            HttpServer::handle_errReq(&m_req, resp);
         }
     }
     std::cout << "shared count" << resp.use_count() << std::endl;
@@ -199,7 +192,7 @@ int HttpServer::Session::onReqMessageBegin(http_parser* parser)
     ep->m_req.headers.clear();
     ep->m_req.body.clear();
     ep->m_req.url.clear();
-
+    ep->m_req.is_queryParams_parsed = false;
     return 0;
 }
 
@@ -381,37 +374,13 @@ void HttpServer::inter_on_connect(uv_stream_t *server, int status)
 void HttpServer::post(const std::string& url,
                      const std::function<void(httpReq*, httpRespPtr)>& callback)
 {
-    post_callbacks.insert(std::make_pair(url, callback));
+    m_router.addRoute(HTTP_POST, url, callback);
 }
 
 void HttpServer::get(const std::string& url,
                     const std::function<void(httpReq*, httpRespPtr)>& callback)
 {
-    get_callbacks.insert(std::make_pair(url, callback));
-}
-
-void HttpServer::handle_post(httpReq* req, httpRespPtr resp)
-{
-    auto it = post_callbacks.find(req->url);
-    if (it != post_callbacks.end())
-    {
-        it->second(req, resp);
-    } else
-    {
-        handle_errReq(req, resp);
-    }
-}
-
-void HttpServer::handle_get(httpReq* req, httpRespPtr resp)
-{
-    auto it = get_callbacks.find(req->url);
-    if (it != get_callbacks.end())
-    {
-        it->second(req, resp);
-    } else
-    {
-        handle_errReq(req, resp);
-    }
+    m_router.addRoute(HTTP_GET, url, callback);
 }
 
 void HttpServer::handle_errReq(httpReq* req, httpRespPtr resp)
