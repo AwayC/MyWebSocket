@@ -53,9 +53,11 @@ int main() {
 
     svr->get("/id/:id", [](httpReq* req, httpRespPtr resp)
     {
-        std::cout << req->params.size() << std::endl;
-        // std::cout << "id: " << req->params[1] << std::endl;
-        std::cout << req->query("name").size() << std::endl;
+        std::cout << req->params["id"] << std::endl;
+        for (auto& param : req->query())
+        {
+            std::cout << param.first << " " << param.second << std::endl;
+        }
         resp->sendStr("connect");
     });
     svr->start();

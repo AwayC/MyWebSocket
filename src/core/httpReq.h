@@ -23,15 +23,14 @@ public:
     http_method method;
 
     std::string version;
-    std::smatch params;
+    HttpParamMap params;
     bool is_queryParams_parsed;
 
     httpReq() : is_queryParams_parsed(false) {};
-    std::string query(const std::string& key);
+    const HttpParamMap& query();
 
 private:
     HttpParamMap queryParams;
-
 
     void urlDecode(std::string_view str);
 };

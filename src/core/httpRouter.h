@@ -18,6 +18,7 @@ using RouterHandler = std::function<void(httpReq*, httpRespPtr)>;
 struct Route {
     std::regex pattern;
     RouterHandler handler;
+    std::vector<std::string> paramNames;
 };
 
 class httpRouter
@@ -31,7 +32,8 @@ public:
 
 private:
     // 解析路径模板为正则表达式
-    std::string parse_path_to_regex(const std::string& path_template);
+    static std::pair<std::string, std::vector<std::string>>
+    parse_path_to_regex(const std::string& path_template);
 
     /*
      * 路由表

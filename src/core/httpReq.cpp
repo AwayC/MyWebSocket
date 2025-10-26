@@ -5,7 +5,7 @@
 #include "httpReq.h"
 
 /************* httpReq *************/
-std::string httpReq::query(const std::string& key)
+const HttpParamMap& httpReq::query()
 {
     if (!is_queryParams_parsed)
     {
@@ -14,20 +14,14 @@ std::string httpReq::query(const std::string& key)
         is_queryParams_parsed = true;
     }
 
-    auto it = queryParams.find(key);
-    if (it != queryParams.end())
-    {
-        return it->second;
-    }
-
-    return "";
+   return queryParams;
 }
 
 void httpReq::urlDecode(std::string_view str) {
     // /**/**?val=xxx&val=xxx
     //find '?'
     size_t pos = str.find('?');
-    pos = pos == std::string_view::npos ? 0 : str.size();
+    pos = pos == std::string_view::npos ? str.size() : pos + 1;
 
     while (pos < str.size())
     {
@@ -41,7 +35,7 @@ void httpReq::urlDecode(std::string_view str) {
         std::string_view pair_str = str.substr(pos, end - pos);
 
         // find '='
-        size_t eq = str.find('=', pos);
+        size_t eq = pair_str.find('=', 0);
         std::string key;
         std::string value;
 
@@ -49,8 +43,7 @@ void httpReq::urlDecode(std::string_view str) {
         {
             key = pair_str;
             value = "";
-        } else
-        {
+        } else {
             key = pair_str.substr(0, eq);
             value = pair_str.substr(eq + 1, end - pos - eq - 1);
         }
