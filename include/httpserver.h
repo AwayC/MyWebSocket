@@ -160,6 +160,7 @@ private:
     uv_tcp_t *m_tcp_svr;
     std::string m_ip;
     int m_port;
+    std::atomic<bool> m_running = false;
 
     int m_keepAliveTimeout;
 
