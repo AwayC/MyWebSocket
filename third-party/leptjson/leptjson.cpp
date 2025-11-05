@@ -346,6 +346,21 @@ lept_value::lept_value(const lept_value& val) {
 	type = val.type;
 }
 
+lept_value& lept_value::operator=(lept_value val) {
+	this->free();
+
+	switch (val.type) {
+		case lept_type::number: v.n = val.v.n; break;
+		case lept_type::string: new(&v.s) std::string(std::move(val.v.s)); break;
+		case lept_type::array: new(&v.arr) array_t(std::move(val.v.arr)); break;
+		case lept_type::object: new(&v.obj) object_t(std::move(val.v.obj)); break;
+		default: break;
+	}
+
+	type = val.type;
+	return *this;
+}
+
 lept_value::~lept_value() noexcept{
 	this->free();
 }

@@ -250,21 +250,29 @@ static void test_stringify() {
 static void test_construct() {
 	lept_value v = {
 		{"null", nullptr},
-		{"false", false},
-		{"true", true},
-		{"number", 123.0},
-		{"string", "abc"},
-		{"array", {
-			{"a1", 1.0,},
-			{"a2", 2.0,},
-			{"a3", 3.0,},
-		}},
+		{"key", "val"},
+		{"arr", {1.0, 2.0, 3.0}},
+		{"obj", {{"1", 1.0}, {"2", 2.0}, {"3", 3.0}}}
 	};
-
+	lept_value arr = {
+		nullptr, "key", {1.0, 2.0, 3.0}
+	};
 
 	std::string str = v.stringify();
 	std::cout << str << std::endl;
+	std::cout << v["key"].stringify() << std::endl;
+	str = arr.stringify();
+	std::cout << str << std::endl;
 
+	v = arr;
+	std::cout << v.stringify() << std::endl;
+	v =  {
+		{"null", nullptr},
+		{"key", "val"},
+		{"arr", {1.0, 2.0, 3.0}},
+		{"obj", {{"1", 1.0}, {"2", 2.0}, {"3", 3.0}}}
+	};
+	std::cout << v.stringify() << std::endl;
 
 }
 
