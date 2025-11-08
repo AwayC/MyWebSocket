@@ -9,6 +9,7 @@
 #include <http_parser.h>
 #include <regex>
 #include <unordered_map>
+#include "uv.h"
 
 
 using HttpParamMap = std::unordered_map<std::string, std::string>;
@@ -25,9 +26,12 @@ public:
     std::string version;
     HttpParamMap params;
     bool is_queryParams_parsed;
+    std::string ip;
+    int port;
 
     httpReq() : is_queryParams_parsed(false) {};
     const HttpParamMap& query();
+    void set_ip(uv_tcp_t* client);
 
 private:
     HttpParamMap queryParams;

@@ -12,7 +12,7 @@
 
 
 /************* Session *************/
-HttpServer::Session::Session(uv_stream_t *client, HttpServer* owner) : m_client(client)
+HttpServer::Session::Session(uv_tcp_t *client, HttpServer* owner) : m_client(client)
 {
     m_owner = owner;
     m_recvBuf = uv_buf_init(new char[HTTP_DEFAULT_RECV_BUF_SIZE],
@@ -278,7 +278,7 @@ void HttpServer::Session::transferBufferToWsSession(uv_buf_t* buf)
 }
 
 /************* HttpServer *************/
-void HttpServer::handle_connect(uv_stream_t* client)
+void HttpServer::handle_connect(uv_tcp_t* client)
 {
     auto ss = Session::create(client, this);
 
@@ -288,7 +288,8 @@ void HttpServer::handle_connect(uv_stream_t* client)
         std::lock_guard<std::mutex> lock(m_mutex);
         m_sessions.push_back(ss);
     }
-    uv_read_start(client, Session::recv_alloc_cb, Session::recv_cb);
+    ss->m_req.set_ip(client);
+    uv_read_start((uv_stream_t*)client, Session::recv_alloc_cb, Session::recv_cb);
 }
 
 
@@ -365,7 +366,7 @@ void HttpServer::inter_on_connect(uv_stream_t *server, int status)
         {
             self->onConnectCb(client);
         }
-        self->handle_connect((uv_stream_t*)client);
+        self->handle_connect(client);
 
     } else
     {
@@ -412,7 +413,7 @@ void HttpServer::setKeepAliveTimeout(int timeout)
 
 void HttpServer::closeSession(const SessionPtr &session, bool isUpgrade)
 {
-    uv_stream_t* client = session->m_client;
+    uv_stream_t* client = (uv_stream_t*)session->m_client;
     uv_read_stop(client);
 
     if (!isUpgrade)

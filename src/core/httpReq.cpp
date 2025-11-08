@@ -5,6 +5,34 @@
 #include "httpReq.h"
 
 /************* httpReq *************/
+void httpReq::set_ip(uv_tcp_t* client) {
+    struct sockaddr_storage addr;
+    int len = sizeof(addr);
+    int r = uv_tcp_getpeername(client, (struct sockaddr*)&addr, &len);
+
+    ip.clear();
+    port = 0;
+
+    if (r == 0) {
+        char ip_[INET6_ADDRSTRLEN];
+        int port_ = 0;
+
+        if (addr.ss_family == AF_INET) {
+            struct sockaddr_in* s = (struct sockaddr_in*)&addr;
+            uv_ip4_name(s, ip_, sizeof(ip_));
+            port_ = ntohs(s->sin_port);
+        } else if (addr.ss_family == AF_INET6) {
+            struct sockaddr_in6* s = (struct sockaddr_in6*)&addr;
+            uv_ip6_name(s, ip_, sizeof(ip_));
+            port_ = ntohs(s->sin6_port);
+        }
+
+        ip = ip_;
+        port = port_;
+    }
+}
+
+
 const HttpParamMap& httpReq::query()
 {
     if (!is_queryParams_parsed)

@@ -68,7 +68,7 @@ public:
 
     struct Session : public std::enable_shared_from_this<Session>
     {
-        uv_stream_t *m_client;
+        uv_tcp_t *m_client;
         HttpServer* m_owner;
 
         /*
@@ -88,11 +88,11 @@ public:
         uv_timer_t m_keepAliveTimer{};
         bool m_isKeepAlive;
 
-        Session(uv_stream_t *client, HttpServer* owner);
+        Session(uv_tcp_t *client, HttpServer* owner);
 
         ~Session();
 
-        static std::shared_ptr<Session> create(uv_stream_t *client, HttpServer* owner)
+        static std::shared_ptr<Session> create(uv_tcp_t *client, HttpServer* owner)
         {
             return std::make_shared<Session>(client, owner);
         }
@@ -138,7 +138,7 @@ public:
         }
         uv_stream_t* getClient() const
         {
-            return m_client;
+            return (uv_stream_t*)m_client;
         }
 
         static void onRequestComplete(httpReq* req);
@@ -183,7 +183,7 @@ private:
      * 内部事件处理
      */
     static void inter_on_connect(uv_stream_t *server, int status);
-    void handle_connect(uv_stream_t *client);
+    void handle_connect(uv_tcp_t *client);
 
     size_t getSessionCount() const
     {
