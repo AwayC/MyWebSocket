@@ -15,10 +15,12 @@ void test()
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
+    lept_value payload;
     try
     {
-        JwtUtil::verify(token, JWT_KEY, 1);
+        payload = JwtUtil::verify(token, JWT_KEY, 1);
         std::cout << "verify token passed" << std::endl;
+        std::cout << "payload: " << payload.stringify() << std::endl;
     }
     catch (const std::exception& e)
     {

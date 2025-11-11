@@ -28,7 +28,7 @@ std::string JwtUtil::sign(const lept_value& payload,
     return token;
 }
 
-void JwtUtil::verify(const std::string& token,
+lept_value JwtUtil::verify(const std::string& token,
                         const std::string& key,
                         int maxAge_hours) {
     auto decoded_token = jwt::decode(token);
@@ -36,10 +36,15 @@ void JwtUtil::verify(const std::string& token,
     auto verifier = jwt::verify()
         .allow_algorithm(jwt::algorithm::hs256(key));
 
+
     verifier.verify(decoded_token);
 
-    if (maxAge_hours < 0)
-        return ;
+    lept_value payload;
+
+    if (maxAge_hours < 0) {
+        payload.parse(decoded_token.get_payload());
+        return payload;
+    }
 
     if (!decoded_token.has_payload_claim("iat"))
     {
@@ -58,6 +63,9 @@ void JwtUtil::verify(const std::string& token,
     {
         throw std::runtime_error("Token is expired");
     }
+
+    payload.parse(decoded_token.get_payload());
+    return payload;
 }
 
 picojson::value JwtUtil::transform(const lept_value& v)

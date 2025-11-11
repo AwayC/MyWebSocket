@@ -13,7 +13,7 @@ public:
     static std::string sign(const lept_value& payload,
                             const std::string& key,
                             int expires);
-    static void verify(const std::string& token,
+    static lept_value verify(const std::string& token,
                         const std::string& key,
                         int maxAge);
 private:
