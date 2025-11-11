@@ -9,6 +9,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenSSL REQUIRED)
 
+# jwt-cpp
+include(FetchContent)
+fetchcontent_declare(jwt-cpp
+        GIT_REPOSITORY https://github.com/Thalhammer/jwt-cpp.git
+        GIT_TAG 08bcf77a687fb06e34138e9e9fa12a4ecbe12332 # v0.7.0 release
+)
+set(JWT_BUILD_EXAMPLES OFF CACHE BOOL "disable building examples" FORCE)
+fetchcontent_makeavailable(jwt-cpp)
+
 
 add_subdirectory(third-party/libuv)
 add_subdirectory(third-party/http-parser)
@@ -16,6 +25,7 @@ add_subdirectory(third-party/leptjson)
 
 set(UTIL_DIR
     src/util/ssl.cpp
+    src/util/jwt.cpp
 )
 
 add_library(websocket
@@ -28,6 +38,10 @@ add_library(websocket
     src/core/websocket_parser.cpp
     ${UTIL_DIR}
     src/core/httpRouter.cpp
+)
+
+target_linK_libraries(websocket PRIVATE
+    jwt-cpp::jwt-cpp
 )
 
 target_link_libraries(websocket PUBLIC
@@ -68,4 +82,11 @@ target_link_libraries(ws_parser
 add_executable(http_router test/test_router.cpp)
 target_link_libraries(http_router
         websocket
+)
+
+#test jwt
+add_executable(test_jwt test/test_jwt.cpp)
+target_link_libraries(test_jwt
+        websocket
+        jwt-cpp::jwt-cpp
 )

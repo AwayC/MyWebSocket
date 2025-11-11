@@ -24,7 +24,8 @@ static int test_pass = 0;
 		}\
 	} while(0) 
 
-#define EXPECT_EQ_INT(expect, actual) EXPECT_EQ_BASE((expect) == (actual) , expect, actual , "%d") 
+#define EXPECT_EQ_INT(expect, actual) EXPECT_EQ_BASE((expect) == (actual) , expect, actual , "%d")
+#define EXPECT_EQ_INT64(expect, actual) EXPECT_EQ_BASE((expect) == (actual) , expect, actual , "%ld")
 #define EXPECT_EQ_TYPE(expect, actual) EXPECT_EQ_BASE((expect) == (actual) , expect, actual, "%d" ) 
 #define EXPECT_EQ_DOUBLE(expect, actual) EXPECT_EQ_BASE((expect) == (actual) , expect, actual, "%.17g") 
 #define EXPECT_TRUE(actual) EXPECT_EQ_BASE((actual) != 0, "true" , "false" , "%s" ) 
@@ -68,11 +69,10 @@ static void test_parse_false() {
 } while(0) 
 
 static void test_parse_number() {
-	TEST_NUMBER(0.0, "-0"); 
 #if 1
 	TEST_NUMBER(0.0, "-0.0");
-	TEST_NUMBER(1.0, "1");
-	TEST_NUMBER(-1.0, "-1");
+	TEST_NUMBER(1.0, "1.0");
+	TEST_NUMBER(-1.0, "-1.0");
 	TEST_NUMBER(1.5, "1.5");
 	TEST_NUMBER(-1.5, "-1.5");
 	TEST_NUMBER(3.1416, "3.1416");
@@ -99,6 +99,22 @@ static void test_parse_number() {
 	TEST_NUMBER(1.7976931348623157e+308, "1.7976931348623157e+308");  /* Max double */
 	TEST_NUMBER(-1.7976931348623157e+308, "-1.7976931348623157e+308");
 #endif
+}
+
+#define TEST_INTEGER(expect, json) do{\
+	lept_value v; \
+	EXPECT_EQ_INT(LEPT_PARSE_OK, v.parse(json)) ; \
+	EXPECT_EQ_INT(lept_type::integer, v.get_type()) ;\
+	EXPECT_EQ_INT64(expect, v.get_integer()) ;\
+} while(0)
+
+static void test_parse_integer()
+{
+	TEST_INTEGER(0, "0");
+	TEST_INTEGER(1, "1");
+	TEST_INTEGER(-1, "-1");
+	TEST_INTEGER(1000000, "1000000");
+	TEST_INTEGER(-2000000, "-2000000");
 }
 
 #define TEST_STRING(expect, json) do{ \
@@ -133,22 +149,16 @@ void static test_parse_array() {
 	EXPECT_EQ_INT(lept_type::array, v.get_type()); 
 	EXPECT_EQ_SIZE_T(0, v.get_array_size()); 
 	
-	EXPECT_EQ_INT(LEPT_PARSE_OK, v.parse("[ null , false , true , 123 , \"abc\" ]")); 
+	EXPECT_EQ_INT(LEPT_PARSE_OK, v.parse("[ null , false , true , 123.0 , 123 , \"abc\" ]"));
 	EXPECT_EQ_INT(lept_type::array, v.get_type()); 
-	EXPECT_EQ_SIZE_T(5, v.get_array_size());
-	std::vector<lept_type> a = { lept_type::null, lept_type::lfalse, lept_type::ltrue, lept_type::number, lept_type::string }; 
-	for (size_t i = 0; i < 5;i ++) 
-		do {
-			test_count++; if ((a[i]) == (v.get_array_element(i).get_type())) test_pass++; else {
-				fprintf(stderr, "%s:%d: expect: " "%d"" actual: " "%d" "\n", "E:\\C++start\\JSON_PARSE\\test.cpp", 141, a[i], v.get_array_element(i).get_type()); main_ret = 1;
-			}
-		} while (0);
-	do {
-		test_count++; if ((123.0) == (v.get_array_element(3).get_number())) test_pass++; else {
-			fprintf(stderr, "%s:%d: expect: " "%.17g"" actual: " "%.17g" "\n", "E:\\C++start\\JSON_PARSE\\test.cpp", 146, 123.0, v.get_array_element(3).get_number()); main_ret = 1;
-		}
-	} while (0);
-	EXPECT_EQ_STRING("abc", v.get_array_element(4).get_string().c_str(), v.get_array_element(4).get_string().size());
+	EXPECT_EQ_SIZE_T(6, v.get_array_size());
+	std::vector<lept_type> a = { lept_type::null, lept_type::lfalse, lept_type::ltrue, lept_type::number, lept_type::integer, lept_type::string };
+	for (size_t i = 0; i < 6;i ++)
+		EXPECT_EQ_INT(a[i], v.get_array_element(i).get_type());
+
+	EXPECT_EQ_DOUBLE(123.0, v.get_array_element(3).get_number());
+	EXPECT_EQ_INT64(123, v.get_array_element(4).get_integer());
+	EXPECT_EQ_STRING("abc", v.get_array_element(5).get_string().c_str(), v.get_array_element(5).get_string().size());
 #endif
 	EXPECT_EQ_INT(LEPT_PARSE_OK, v.parse("[ [ ] , [ 0 ] , [ 0 , 1 ] , [ 0 , 1 , 2 ] ]")); 
 	EXPECT_EQ_INT(lept_type::array, v.get_type()); 
@@ -159,8 +169,8 @@ void static test_parse_array() {
 		EXPECT_EQ_SIZE_T(i, a.get_array_size());
 		for (size_t j = 0; j < i; j++) {
 			lept_value e = a.get_array_element(j); 
-			EXPECT_EQ_INT(lept_type::number, e.get_type()); 
-			EXPECT_EQ_DOUBLE((double)j, e.get_number()); 
+			EXPECT_EQ_INT(lept_type::integer, e.get_type());
+			EXPECT_EQ_INT64((int64_t)j, e.get_integer());
 		}
 	}
 }
@@ -179,15 +189,16 @@ void test_parse_object() {
 		"\"f\" : false , "
 		"\"t\" : true , "
 		"\"i\" : 123 , "
+		"\"d\" : 123.0 , "
 		"\"s\" : \"abc\", "
-		"\"a\" : [ 1, 2, 3 ],"
-		"\"o\" : { \"1\" : 1, \"2\" : 2, \"3\" : 3 }"
+		"\"a\" : [ 1.0, 2.0, 3.0 ],"
+		"\"o\" : { \"1\" : 1.0, \"2\" : 2.0, \"3\" : 3.0 }"
 		" } "
 	)); 
 #endif 
 #if 1
 	EXPECT_EQ_INT(lept_type::object, v.get_type()); 
-	EXPECT_EQ_SIZE_T(7, v.get_object_size()); 
+	EXPECT_EQ_SIZE_T(8, v.get_object_size());
 	EXPECT_TRUE(v.contains_key("n"));
 	EXPECT_EQ_INT(lept_type::null, v.get_object_value("n").get_type()); 
 	EXPECT_TRUE(v.contains_key("f")); 
@@ -195,8 +206,10 @@ void test_parse_object() {
 	EXPECT_TRUE(v.contains_key("t")); 
 	EXPECT_EQ_INT(lept_type::ltrue, v.get_object_value("t").get_type()); 
 	EXPECT_TRUE(v.contains_key("i")); 
-	EXPECT_EQ_DOUBLE(123.0, v.get_object_value("i").get_number()); 
-	EXPECT_TRUE(v.contains_key("s")); 
+	EXPECT_EQ_INT64(123, v.get_object_value("i").get_integer());
+	EXPECT_TRUE(v.contains_key("d"));
+	EXPECT_EQ_DOUBLE(123.0, v.get_object_value("d").get_number());
+	EXPECT_TRUE(v.contains_key("s"));
 	EXPECT_EQ_STRING("abc", v.get_object_value("s").get_string().c_str(), v.get_object_value("s").get_string().size());
 	EXPECT_TRUE(v.contains_key("a")); 
 	lept_value a = v.get_object_value("a"); 
@@ -251,11 +264,11 @@ static void test_construct() {
 	lept_value v = {
 		{"null", nullptr},
 		{"key", "val"},
-		{"arr", {1.0, 2.0, 3.0}},
+		{"arr", {1, 2, 3}},
 		{"obj", {{"1", 1.0}, {"2", 2.0}, {"3", 3.0}}}
 	};
 	lept_value arr = {
-		nullptr, "key", {1.0, 2.0, 3.0}
+		nullptr, "key", {1, 2, 3}
 	};
 
 	std::string str = v.stringify();
@@ -269,7 +282,7 @@ static void test_construct() {
 	v =  {
 		{"null", nullptr},
 		{"key", "val"},
-		{"arr", {1.0, 2.0, 3.0}},
+		{"arr", {1, 2.0, 3}},
 		{"obj", {{"1", 1.0}, {"2", 2.0}, {"3", 3.0}}}
 	};
 	std::cout << v.stringify() << std::endl;
@@ -282,6 +295,7 @@ static void test_parse() {
 	test_parse_false();
 	test_parse_true();
 	test_parse_number();
+	test_parse_integer();
 	test_parse_string(); 
 	test_parse_array(); 
 	test_parse_object(); 
