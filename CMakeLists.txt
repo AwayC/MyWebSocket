@@ -40,7 +40,7 @@ add_library(websocket
     src/core/httpRouter.cpp
 )
 
-target_linK_libraries(websocket PRIVATE
+target_linK_libraries(websocket PUBLIC
     jwt-cpp::jwt-cpp
 )
 

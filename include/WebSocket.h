@@ -54,7 +54,7 @@ public:
     {
         m_onMessageCb = callback;
     }
-    void onError(const std::function<void(WsSessionPtr)>& callback)
+    void onError(const std::function<void(WsSessionPtr, const std::exception err)>& callback)
     {
         m_onErrorCb = callback;
     }
@@ -118,7 +118,7 @@ private:
     //netWorking
     std::function<void(WsSessionPtr)> m_onConnectCb;
     std::function<void(WsSessionPtr)> m_onCloseCb;
-    std::function<void(WsSessionPtr)> m_onErrorCb;
+    std::function<void(WsSessionPtr, const std::exception)> m_onErrorCb;
 
     //messaging
     std::function<void(WsSessionPtr)> m_onMessageCb;

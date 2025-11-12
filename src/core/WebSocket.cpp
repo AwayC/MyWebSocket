@@ -124,7 +124,8 @@ void WsSession::handleMessage(size_t nread)
     if (err != WsParseErr::SUCCESS)
     {
         std::cerr << "websocket session parse err: " << WsErr_Str(err) << std::endl;
-        WS_CALLBACK(m_onErrorCb, shared_from_this());
+        std::runtime_error ex("websocket session parse error");
+        WS_CALLBACK(m_onErrorCb, shared_from_this(), ex);
         close();
         return ;
     }
