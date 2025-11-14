@@ -330,7 +330,7 @@ HttpServer::HttpServer(const std::string& ip, int port)
 }
 
 void HttpServer::start() {
-    if (m_running)
+    if (!m_running.exchange(true))
     {
         std::cerr << "http server already running" << std::endl;
         return ;
