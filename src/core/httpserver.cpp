@@ -332,11 +332,14 @@ HttpServer::HttpServer(const std::string& ip, int port)
 void HttpServer::start() {
     if (!m_running.exchange(true))
     {
+        std::cout << "server start" << std::endl;
+        uv_run(m_loop, UV_RUN_DEFAULT);
+    } else
+    {
         std::cerr << "http server already running" << std::endl;
         return ;
     }
-    std::cout << "server start" << std::endl;
-    uv_run(m_loop, UV_RUN_DEFAULT);
+
 }
 
 HttpServer::~HttpServer() {
