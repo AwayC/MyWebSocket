@@ -62,12 +62,10 @@ int lept_context::parse_literal(lept_value* v, std::string literal, lept_type ty
 			return LEPT_PARSE_INVALID_VALUE;
 	}
 	ptr += i;
-	switch (type) {
-		case lept_type::null: v->set_null(); break;
-		case lept_type::lfalse: v->set_boolean(0); break;
-		case lept_type::ltrue: v->set_boolean(1);  break;
-		default: break;
-	}
+	if (type == lept_type::null)
+		v->set_null();
+	else
+		v->set_boolean(literal[0] == 't');
 	return LEPT_PARSE_OK;
 }
 
@@ -300,14 +298,14 @@ int lept_context::parse_object(lept_value* v) {
 
 int lept_context::parse_value(lept_value* v) {
 	switch (this->json[ptr]) {
-	case 't': return this->parse_literal(v, "true", lept_type::ltrue);
-	case 'f': return this->parse_literal(v, "false", lept_type::lfalse);
-	case 'n': return this->parse_literal(v, "null", lept_type::null);
-	case '\0': return LEPT_PARSE_EXPECT_VALUE;
-	case '\"': return this->parse_string(v);
-	case '[': return this->parse_array(v);
-	case '{': return this->parse_object(v);
-	default: return parse_number(v);
+		case 't': return this->parse_literal(v, "true", lept_type::boolean);
+		case 'f': return this->parse_literal(v, "false", lept_type::boolean);
+		case 'n': return this->parse_literal(v, "null", lept_type::null);
+		case '\0': return LEPT_PARSE_EXPECT_VALUE;
+		case '\"': return this->parse_string(v);
+		case '[': return this->parse_array(v);
+		case '{': return this->parse_object(v);
+		default: return parse_number(v);
 	}
 }
 
@@ -318,8 +316,7 @@ std::string lept_value::typeStr(lept_type t)
 #define CASE_(x, s) case lept_type::x: return #s;
 		switch (t) {
 			CASE_(null, null)
-			CASE_(lfalse, false)
-			CASE_(ltrue, true)
+			CASE_(boolean, boolean)
 			CASE_(number, number)
 			CASE_(string, string)
 			CASE_(array, array)
@@ -356,6 +353,7 @@ lept_value::lept_value(const lept_value& val) {
 	switch (val.type) {
 		case lept_type::number: v.n = val.v.n; break;
 		case lept_type::integer: v.i = val.v.i; break;
+		case lept_type::boolean: v.b = val.v.b; break;
 		case lept_type::string: new(&v.s) std::string(val.v.s); break;
 		case lept_type::array: new(&v.arr) array_t(val.v.arr); break;
 		case lept_type::object: new(&v.obj) object_t(val.v.obj); break;
@@ -370,6 +368,7 @@ lept_value& lept_value::operator=(lept_value val) {
 	switch (val.type) {
 		case lept_type::number: v.n = val.v.n; break;
 		case lept_type::integer: v.i = val.v.i; break;
+		case lept_type::boolean: v.b = val.v.b; break;
 		case lept_type::string: new(&v.s) std::string(std::move(val.v.s)); break;
 		case lept_type::array: new(&v.arr) array_t(std::move(val.v.arr)); break;
 		case lept_type::object: new(&v.obj) object_t(std::move(val.v.obj)); break;
@@ -404,13 +403,13 @@ void lept_value::set_null() {
 
 void lept_value::set_boolean(int b) {
 	this->free();
-	type = b == 0 ? lept_type::lfalse : lept_type::ltrue;
+	type = lept_type::boolean;
+	v.b = b;
 }
 
 bool lept_value::get_boolean() const{
-	assert(type == lept_type::lfalse || type == lept_type::ltrue);
-	if (type == lept_type::ltrue) return true;
-	else return false;
+	assert(type == lept_type::boolean);
+	return v.b;
 }
 
 void lept_value::set_number(double num) {
@@ -470,7 +469,7 @@ lept_value& lept_value::get_array_element(size_t index) {
 	return v.arr[index];
 }
 
-const lept_value& lept_value::get_element(size_t index) const {
+const lept_value& lept_value::get_array_element(size_t index) const {
 	assert(type == lept_type::array && v.arr.size() > index);
 	return v.arr[index];
 }
@@ -533,8 +532,7 @@ void lept_value::stringify_value(std::string& stk) const {
 	int flag;
 	switch (type) {
 		case lept_type::null: stk.append("null"); break;
-		case lept_type::ltrue: stk.append( "true"); break;
-		case lept_type::lfalse: stk.append( "false"); break;
+		case lept_type::boolean: stk.append(v.b ? "true" : "false"); break;
 		case lept_type::number:
 		{
 			char s[32];

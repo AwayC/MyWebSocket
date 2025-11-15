@@ -74,10 +74,8 @@ picojson::value JwtUtil::transform(const lept_value& v)
     {
     case lept_type::null:
         return {};
-    case lept_type::lfalse:
-        return picojson::value(false);
-    case lept_type::ltrue:
-        return picojson::value(true);
+    case lept_type::boolean:
+        return picojson::value(v.get_boolean());
     case lept_type::number:
         return picojson::value(v.get_number());
     case lept_type::integer:
@@ -90,7 +88,7 @@ picojson::value JwtUtil::transform(const lept_value& v)
             size_t size = v.get_array_size();
             for (size_t i = 0;i < size;i ++)
             {
-                arr.push_back(transform(v.get_element(i)));
+                arr.push_back(transform(v.get_array_element(i)));
             }
             return picojson::value(std::move(arr));
         }

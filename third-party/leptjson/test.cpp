@@ -49,7 +49,7 @@ static void test_parse_true() {
 	lept_value v;
 	v.set_boolean(0);
 	EXPECT_EQ_INT(LEPT_PARSE_OK, v.parse("true"));
-	EXPECT_EQ_TYPE(lept_type::ltrue, v.get_type()); 
+	EXPECT_EQ_TYPE(lept_type::boolean, v.get_type());
 	EXPECT_TRUE(v.get_boolean()); 
 }
 
@@ -57,7 +57,7 @@ static void test_parse_false() {
 	lept_value v; 
 	v.set_boolean(1); 
 	EXPECT_EQ_INT(LEPT_PARSE_OK, v.parse("false"));
-	EXPECT_EQ_TYPE(lept_type::lfalse, v.get_type());
+	EXPECT_EQ_TYPE(lept_type::boolean, v.get_type());
 	EXPECT_FALSE(v.get_boolean());
 }
 
@@ -152,7 +152,7 @@ void static test_parse_array() {
 	EXPECT_EQ_INT(LEPT_PARSE_OK, v.parse("[ null , false , true , 123.0 , 123 , \"abc\" ]"));
 	EXPECT_EQ_INT(lept_type::array, v.get_type()); 
 	EXPECT_EQ_SIZE_T(6, v.get_array_size());
-	std::vector<lept_type> a = { lept_type::null, lept_type::lfalse, lept_type::ltrue, lept_type::number, lept_type::integer, lept_type::string };
+	std::vector<lept_type> a = { lept_type::null, lept_type::boolean, lept_type::boolean, lept_type::number, lept_type::integer, lept_type::string };
 	for (size_t i = 0; i < 6;i ++)
 		EXPECT_EQ_INT(a[i], v.get_array_element(i).get_type());
 
@@ -202,9 +202,9 @@ void test_parse_object() {
 	EXPECT_TRUE(v.contains_key("n"));
 	EXPECT_EQ_INT(lept_type::null, v.get_object_value("n").get_type()); 
 	EXPECT_TRUE(v.contains_key("f")); 
-	EXPECT_EQ_INT(lept_type::lfalse, v.get_object_value("f").get_type()); 
-	EXPECT_TRUE(v.contains_key("t")); 
-	EXPECT_EQ_INT(lept_type::ltrue, v.get_object_value("t").get_type()); 
+	EXPECT_EQ_INT(lept_type::boolean, v.get_object_value("f").get_type());
+	EXPECT_TRUE(v.contains_key("t"));
+	EXPECT_EQ_INT(lept_type::boolean, v.get_object_value("t").get_type());
 	EXPECT_TRUE(v.contains_key("i")); 
 	EXPECT_EQ_INT64(123, v.get_object_value("i").get_integer());
 	EXPECT_TRUE(v.contains_key("d"));
@@ -263,16 +263,19 @@ static void test_stringify() {
 static void test_construct() {
 	lept_value v = {
 		{"null", nullptr},
-		{"key", "val"},
+		{"t", true},
+		{"key", "value"},
 		{"arr", {1, 2, 3}},
 		{"obj", {{"1", 1.0}, {"2", 2.0}, {"3", 3.0}}}
 	};
+	std::string str = v.stringify();
+	std::cout << str << std::endl;
+
 	lept_value arr = {
 		nullptr, "key", {1, 2, 3}
 	};
 
-	std::string str = v.stringify();
-	std::cout << str << std::endl;
+
 	std::cout << v["key"].stringify() << std::endl;
 	str = arr.stringify();
 	std::cout << str << std::endl;
@@ -289,6 +292,28 @@ static void test_construct() {
 
 }
 
+void test_template()
+{
+	lept_value obj = {
+		{"null", nullptr},
+		{"key", "val"},
+		{"arr", {1, 2, 3}},
+		{"obj", {{"1", 1.0}, {"2", 2.0}, {"3", 3.0}}}
+	};
+
+	lept_value arr = {
+		2, 3.0, true, "away", nullptr
+	};
+
+	EXPECT_EQ_INT(true, obj.is<object_t>());
+	EXPECT_EQ_INT(true, arr.is<array_t>());
+	EXPECT_EQ_INT(2, arr[0].get<int64_t>());
+	EXPECT_EQ_DOUBLE(3.0, arr[1].get<double>());
+	EXPECT_EQ_INT(true, arr[2].get<bool>());
+	EXPECT_EQ_STRING("away", arr[3].get<std::string>().c_str(), arr[3].get<std::string>().size());
+	EXPECT_EQ_INT(true, arr[4].is<nullptr_t>());
+}
+
 
 static void test_parse() {
 	test_parse_null();
@@ -296,11 +321,12 @@ static void test_parse() {
 	test_parse_true();
 	test_parse_number();
 	test_parse_integer();
-	test_parse_string(); 
-	test_parse_array(); 
-	test_parse_object(); 
+	test_parse_string();
+	test_parse_array();
+	test_parse_object();
 	test_stringify();
 	test_construct();
+	test_template();
 }
 
 int main() {

@@ -6,14 +6,15 @@
 #include <vector>
 #include <map>
 #include <initializer_list>
-enum class lept_type { null, lfalse, ltrue, number, integer, string, array, object };
+enum class lept_type { null, boolean, number, integer, string, array, object };
 
 class lept_value;
 
 using object_t = std::map<std::string, lept_value>;
 using array_t = std::vector<lept_value>;
 
-class lept_value {
+class lept_value
+{
 private:
 	union u{
 		double n;
@@ -21,6 +22,7 @@ private:
 		array_t arr;
 		object_t obj;
 		int64_t i;
+		bool b;
 
 		u() {};
 		~u() {};
@@ -32,7 +34,7 @@ private:
 	void stringify_value(std::string &stk) const;
 	void stringify_string(std::string& stk) const;
 
-public :
+	public :
 	lept_value() noexcept ;
 	lept_value(const lept_value& val);
 	lept_value(const std::string& s);
@@ -83,7 +85,7 @@ public :
 
 	size_t get_array_size() const;
 	lept_value& get_array_element(size_t index);
-	const lept_value& get_element(size_t index) const;
+	const lept_value& get_array_element(size_t index) const;
 	void set_array(std::vector<lept_value>&& val);
 	void set_array(const array_t& arr);
 
@@ -104,12 +106,82 @@ public :
 		return v.obj;
 	}
 
+	template<typename T>
+	bool is() const;
+
+#define IS_TYPE(ctype, jtype)		\
+template<> inline bool is<ctype>() const { \
+return type == lept_type::jtype; \
+}
+
+	IS_TYPE(std::nullptr_t, null);
+	IS_TYPE(bool, boolean);
+	IS_TYPE(double, number);
+	IS_TYPE(int64_t, integer);
+	IS_TYPE(std::string, string);
+	IS_TYPE(array_t, array);
+	IS_TYPE(object_t, object);
+
+#undef IS_TYPE
+
+	template<typename T>
+	T get() const;
+
+	template<typename T>
+	T& get();
+
+	template<typename T>
+	const T& get() const;
+
+#define GET_STATIC(ctype, var)  \
+	template<> inline ctype get<ctype>() const { \
+		return (var); \
+	} \
+	template<> inline ctype& get<ctype>() = delete; \
+	template<> inline const ctype& get<ctype>() const = delete;
+
+#define GET(ctype, var) \
+	template<> inline const ctype& get<ctype>() const { \
+		assert(is<ctype>()); \
+		return (var); \
+	} \
+	template<> inline ctype& get<ctype>() { \
+		assert(is<ctype>()); \
+		return (var); \
+	}
+
+	GET(bool, v.b);
+	GET(double, v.n);
+	GET(int64_t, v.i);
+
+	GET(std::string, v.s);
+	GET(array_t, v.arr);
+	GET(object_t, v.obj);
+
+#undef GET_STATIC
+#undef GET
 
 
 	lept_value& operator[](const std::string& key)
 	{
 		assert(type == lept_type::object);
 		return v.obj[key];
+	}
+
+	const lept_value& operator[](const std::string& key) const
+	{
+		assert(type == lept_type::object);
+		return v.obj.at(key);
+	}
+
+	const lept_value& operator[](int index) const
+	{
+		return get_array_element(index);
+	}
+
+	lept_value& operator[](int index)
+	{
+		return get_array_element(index);
 	}
 
 	std::string stringify() const;
