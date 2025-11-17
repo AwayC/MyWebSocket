@@ -13,17 +13,19 @@
 #include "httpResp.h"
 
 
-using RouterHandler = std::function<void(httpReq*, httpRespPtr)>;
 
-struct Route {
-    std::regex pattern;
-    RouterHandler handler;
-    std::vector<std::string> paramNames;
-};
 
 class httpRouter
 {
 public:
+    using RouterHandler = std::function<void(httpReq*, httpRespPtr)>;
+
+    struct Route {
+        std::regex pattern;
+        RouterHandler handler;
+        std::vector<std::string> paramNames;
+    };
+
     void addRoute(http_method method,
                 const std::string& pattern_str,
                 RouterHandler handler);

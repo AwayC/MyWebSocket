@@ -21,7 +21,7 @@ void httpRouter::addRoute(http_method method,
     }
 }
 
-RouterHandler httpRouter::dispatch(httpReq* req)
+httpRouter::RouterHandler httpRouter::dispatch(httpReq* req)
 {
     http_method method = req->method;
     size_t pos = req->url.find('?');
