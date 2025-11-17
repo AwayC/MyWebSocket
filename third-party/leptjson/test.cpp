@@ -305,8 +305,8 @@ void test_template()
 		2, 3.0, true, "away", nullptr
 	};
 
-	EXPECT_EQ_INT(true, obj.is<object_t>());
-	EXPECT_EQ_INT(true, arr.is<array_t>());
+	EXPECT_EQ_INT(true, obj.is<lept_value::object_t>());
+	EXPECT_EQ_INT(true, arr.is<lept_value::array_t>());
 	EXPECT_EQ_INT(2, arr[0].get<int64_t>());
 	EXPECT_EQ_DOUBLE(3.0, arr[1].get<double>());
 	EXPECT_EQ_INT(true, arr[2].get<bool>());
