@@ -66,7 +66,7 @@ void httpResp::initReader(FileReader* reader)
 
 httpResp::~httpResp()
 {
-    std::cerr << "httpResp::~httpResp()" << std::endl;
+    // std::cerr << "httpResp::~httpResp()" << std::endl;
 }
 
 void httpResp::sendFile(const std::string& path)

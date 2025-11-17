@@ -71,9 +71,9 @@ std::shared_ptr<httpResp> HttpServer::Session::initResp()
 bool HttpServer::Session::needKeepConnection (httpReq* req)
 {
     bool ret = false;
-    if (req->headers.find("Connection") != req->headers.end())
+    if (req->headers.find("connection") != req->headers.end())
     {
-        ret = req->headers["Connection"] == "keep-alive";
+        ret = req->headers["connection"] == "keep-alive";
     } else
     {
         std::cout << req->version << std::endl;
@@ -142,6 +142,8 @@ void HttpServer::Session::recv_cb(uv_stream_t* client,
 void HttpServer::Session::handle_request()
 {
     auto resp = initResp();
+    m_isKeepAlive = needKeepConnection(&m_req);
+
     if (m_parser.upgrade)
     {
         //todo: upgrade to websocket
@@ -226,7 +228,12 @@ int HttpServer::Session::onReqHeaderField(http_parser* parser, const char* at, s
 {
     Session* ep = (Session*)parser->data;
     assert(ep != nullptr);
-    ep->m_tmpKey.assign(at, length);
+    ep->m_tmpKey.resize(length);
+
+    std::transform(at, at + length, ep->m_tmpKey.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+
     return 0;
 }
 
@@ -250,12 +257,12 @@ int HttpServer::Session::onReqBody(http_parser* parser, const char* at, size_t l
 void HttpServer::Session::upgradeToWs(httpRespPtr resp)
 {
     resp->setStatus(httpStatus::SWITCHING_PROTOCOLS);
-    resp->setHeader("Upgrade", "websocket");
-    resp->setHeader("Connection", "Upgrade");
+    resp->setHeader("upgrade", "websocket");
+    resp->setHeader("connection", "Upgrade");
 
-    std::string client_key = m_req.headers["Sec-WebSocket-Key"];
+    std::string client_key = m_req.headers["sec-websocket-key"];
     std::string accept_key = WsUtil::calculate_accept_key(client_key);
-    resp->setHeader("Sec-WebSocket-Accept", accept_key);
+    resp->setHeader("sec-websocket-accept", accept_key);
     std::weak_ptr<Session> weak_self = shared_from_this( );
     resp->onSent([weak_self](httpResp* resp){
         if (auto self = weak_self.lock())
