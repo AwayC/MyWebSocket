@@ -10,11 +10,14 @@ enum class lept_type { null, boolean, number, integer, string, array, object };
 
 class lept_value;
 
-using object_t = std::map<std::string, lept_value>;
-using array_t = std::vector<lept_value>;
+
 
 class lept_value
 {
+public:
+	using object_t = std::map<std::string, lept_value>;
+	using array_t = std::vector<lept_value>;
+
 private:
 	union u{
 		double n;
