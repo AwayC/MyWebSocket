@@ -323,7 +323,7 @@ std::string lept_value::typeStr(lept_type t)
 			CASE_(object, object)
 			default: return "unknown";
 		}
-#undef CASE_(x, s)
+#undef CASE_
 }
 
 int lept_value::parse(std::string json) {
@@ -333,7 +333,8 @@ int lept_value::parse(std::string json) {
 	c.str_top = 0;
 	this->free();
 	c.parse_whitespace();
-	if (ret = c.parse_value(this)) {
+	ret = c.parse_value(this);
+	if (ret) {
 		c.parse_whitespace();
 		if (c.ptr != c.json.size() - 1) {
 			this->type = lept_type::null;
@@ -517,7 +518,7 @@ void lept_value::stringify_string(std::string& stk) const {
 			default:
 				if (ch < 0x20) {
 					char buff[7];
-					sprintf(buff, "\\u%04X", ch);
+					snprintf(buff, sizeof(buff), "\\u%04X", ch);
 					stk += buff;
 				}
 				else
@@ -536,14 +537,14 @@ void lept_value::stringify_value(std::string& stk) const {
 		case lept_type::number:
 		{
 			char s[32];
-			sprintf(s, "%.17g", v.n);
+			snprintf(s, sizeof(s), "%.17g", v.n);
 			stk += s;
 		}
 			break;
 		case lept_type::integer:
 		{
 			char s[32];
-			sprintf(s, "%ld", v.i);
+			snprintf(s, sizeof(s), "%d", v.i);
 			stk += s;
 		}
 			break;

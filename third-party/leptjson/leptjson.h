@@ -127,9 +127,6 @@ return type == lept_type::jtype; \
 #undef IS_TYPE
 
 	template<typename T>
-	T get() const;
-
-	template<typename T>
 	T& get();
 
 	template<typename T>
