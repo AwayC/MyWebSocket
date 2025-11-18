@@ -105,7 +105,7 @@ static void test_parse_number() {
 	lept_value v; \
 	EXPECT_EQ_INT(LEPT_PARSE_OK, v.parse(json)) ; \
 	EXPECT_EQ_INT(lept_type::integer, v.get_type()) ;\
-	EXPECT_EQ_INT64(expect, v.get_integer()) ;\
+	EXPECT_EQ_INT(expect, v.get_integer()) ;\
 } while(0)
 
 static void test_parse_integer()
@@ -157,7 +157,7 @@ void static test_parse_array() {
 		EXPECT_EQ_INT(a[i], v.get_array_element(i).get_type());
 
 	EXPECT_EQ_DOUBLE(123.0, v.get_array_element(3).get_number());
-	EXPECT_EQ_INT64(123, v.get_array_element(4).get_integer());
+	EXPECT_EQ_INT(123, v.get_array_element(4).get_integer());
 	EXPECT_EQ_STRING("abc", v.get_array_element(5).get_string().c_str(), v.get_array_element(5).get_string().size());
 #endif
 	EXPECT_EQ_INT(LEPT_PARSE_OK, v.parse("[ [ ] , [ 0 ] , [ 0 , 1 ] , [ 0 , 1 , 2 ] ]")); 
@@ -170,7 +170,7 @@ void static test_parse_array() {
 		for (size_t j = 0; j < i; j++) {
 			lept_value e = a.get_array_element(j); 
 			EXPECT_EQ_INT(lept_type::integer, e.get_type());
-			EXPECT_EQ_INT64((int64_t)j, e.get_integer());
+			EXPECT_EQ_INT((int)j, e.get_integer());
 		}
 	}
 }
@@ -206,7 +206,7 @@ void test_parse_object() {
 	EXPECT_TRUE(v.contains_key("t"));
 	EXPECT_EQ_INT(lept_type::boolean, v.get_object_value("t").get_type());
 	EXPECT_TRUE(v.contains_key("i")); 
-	EXPECT_EQ_INT64(123, v.get_object_value("i").get_integer());
+	EXPECT_EQ_INT(123, v.get_object_value("i").get_integer());
 	EXPECT_TRUE(v.contains_key("d"));
 	EXPECT_EQ_DOUBLE(123.0, v.get_object_value("d").get_number());
 	EXPECT_TRUE(v.contains_key("s"));
@@ -307,7 +307,7 @@ void test_template()
 
 	EXPECT_EQ_INT(true, obj.is<lept_value::object_t>());
 	EXPECT_EQ_INT(true, arr.is<lept_value::array_t>());
-	EXPECT_EQ_INT(2, arr[0].get<int64_t>());
+	EXPECT_EQ_INT(2, arr[0].get<int>());
 	EXPECT_EQ_DOUBLE(3.0, arr[1].get<double>());
 	EXPECT_EQ_INT(true, arr[2].get<bool>());
 	EXPECT_EQ_STRING("away", arr[3].get<std::string>().c_str(), arr[3].get<std::string>().size());

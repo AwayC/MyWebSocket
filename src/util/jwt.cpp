@@ -79,7 +79,7 @@ picojson::value JwtUtil::transform(const lept_value& v)
     case lept_type::number:
         return picojson::value(v.get_number());
     case lept_type::integer:
-        return picojson::value(v.get_integer());
+        return picojson::value(static_cast<int64_t>(v.get_integer()));
     case lept_type::string:
         return picojson::value(v.get_string());
     case lept_type::array:

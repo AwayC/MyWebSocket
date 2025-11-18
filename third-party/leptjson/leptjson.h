@@ -24,7 +24,7 @@ private:
 		std::string s;
 		array_t arr;
 		object_t obj;
-		int64_t i;
+		int i;
 		bool b;
 
 		u() {};
@@ -44,7 +44,6 @@ private:
 	lept_value(std::string&& s);
 	lept_value(double d);
 	lept_value(int i);
-	lept_value(int64_t i);
 	lept_value(std::vector<lept_value>&& arr);
 	lept_value(std::map<std::string, lept_value>&& obj);
 	lept_value(std::nullptr_t) noexcept;
@@ -80,8 +79,8 @@ private:
 	double get_number() const;
 	void set_number(double num);
 
-	int64_t get_integer() const;
-	void set_integer(int64_t i);
+	int get_integer() const;
+	void set_integer(int i);
 
 	const std::string& get_string() const;
 	void set_string(std::string);
@@ -120,7 +119,7 @@ return type == lept_type::jtype; \
 	IS_TYPE(std::nullptr_t, null);
 	IS_TYPE(bool, boolean);
 	IS_TYPE(double, number);
-	IS_TYPE(int64_t, integer);
+	IS_TYPE(int, integer);
 	IS_TYPE(std::string, string);
 	IS_TYPE(array_t, array);
 	IS_TYPE(object_t, object);
@@ -155,7 +154,7 @@ return type == lept_type::jtype; \
 
 	GET(bool, v.b);
 	GET(double, v.n);
-	GET(int64_t, v.i);
+	GET(int, v.i);
 
 	GET(std::string, v.s);
 	GET(array_t, v.arr);

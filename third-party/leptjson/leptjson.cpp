@@ -423,14 +423,14 @@ double lept_value::get_number() const{
 	return v.n;
 }
 
-void lept_value::set_integer(int64_t i)
+void lept_value::set_integer(int i)
 {
 	this->free();
 	this->type = lept_type::integer;
 	this->v.i = i;
 }
 
-int64_t lept_value::get_integer() const
+int lept_value::get_integer() const
 {
 	assert(this->type == lept_type::integer);
 	return v.i;
@@ -608,12 +608,6 @@ lept_value::lept_value(double d)
 }
 
 lept_value::lept_value(int i)
-{
-	this->type = lept_type::integer;
-	this->v.i = i;
-}
-
-lept_value::lept_value(int64_t i)
 {
 	this->type = lept_type::integer;
 	this->v.i = i;
