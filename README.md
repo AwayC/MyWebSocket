@@ -1,7 +1,5 @@
 # MyWebSocket
 
-----
-
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen) ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Mac-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![C++ Standard](https://img.shields.io/badge/C%2B%2B-17%2F20-orange)
 
 **MyWebSocket** 是用于学习的基于`libuv`和 C++17 的高性能 WebSocke 和 HTTP 服务器框架，集成路由功能，JWT验证，JSON 解析等功能。
@@ -10,10 +8,8 @@
 
 ## ✨ 核心特性（Features)
 
-----
-
 - 🚀 **高性能架构**：
-  - 现代 C++20 编写
+  - 现代 C++17 编写
   - 基于`libuv`异步网络`I/O` 库，单线程事件循环，避免多线程开销。
 - 🛠 **现代化设计**：参考`node.js`的网络 api 设计，接口更加现代和方便。
 - ✉️ **HTTP 服务器**：
@@ -26,8 +22,6 @@
 
 
 ## 📦 环境要求 (Requirements)
-
----
 
 * **Compiler**: C++20 编译器（GCC, Clang)
 * **Operate System**: Mac, linux
@@ -42,8 +36,6 @@
 
 
 ## 🔨 构建与安装 （Build and Download)
-
----
 
 ### 1. 克隆仓库
 ```bash
@@ -72,8 +64,6 @@ target_link_libraries(main
 
 
 ## 📖 使用示例 (Usage)
-
----
 
 ### 1. 快速创建 HTTP 服务器
 
