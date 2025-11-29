@@ -1,12 +1,6 @@
 // my_app/main.c
 #include <cstdio>
-#include <uv.h>
-
-#include "httpserver.h"
-#include <string>
-#include <iostream>
-#include "leptjson.h"
-#include "leptjson.h"
+#include "MyWebSocket.h"
 
 
 int main() {
