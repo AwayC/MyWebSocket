@@ -290,6 +290,16 @@ static void test_construct() {
 	};
 	std::cout << v.stringify() << std::endl;
 
+	lept_value::array_t l_arr = {1, 2, 3};
+	lept_value l_arr_val(l_arr);
+	std::cout << l_arr_val.stringify() << std::endl;
+
+	lept_value::object_t l_obj = {
+		{"1", 1.0}, {"2", 2.0}, {"3", 3.0}
+	};
+	lept_value l_obj_val(l_obj);
+	std::cout << l_obj_val.stringify() << std::endl;
+
 }
 
 void test_template()

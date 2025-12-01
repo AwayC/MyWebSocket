@@ -489,7 +489,7 @@ size_t lept_value::get_object_size() const {
 	return v.obj.size();
 }
 
-void lept_value::set_object(std::map<std::string, lept_value>&& mp) {
+void lept_value::set_object(object_t&& mp) {
 	this->free();
 	type = lept_type::object;
 	new(&v.obj) std::map<std::string, lept_value>(std::move(mp));
@@ -614,17 +614,26 @@ lept_value::lept_value(int i)
 	this->v.i = i;
 }
 
-lept_value::lept_value(std::vector<lept_value>&& arr)
+lept_value::lept_value(array_t&& arr)
 {
 	this->type = lept_type::array;
 	new(&v.arr) std::vector<lept_value>(arr);
 }
-lept_value::lept_value(std::map<std::string, lept_value>&& obj)
+
+lept_value::lept_value(const array_t& arr)
+{
+	set_array(arr);
+}
+
+lept_value::lept_value(object_t&& obj)
 {
 	this->type = lept_type::object;
 	new(&v.obj) std::map<std::string, lept_value>(obj);
 }
 
+lept_value::lept_value(const object_t& obj) {
+	set_object(obj);
+}
 
 lept_value::lept_value(std::nullptr_t) noexcept
 {

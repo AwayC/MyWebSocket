@@ -44,8 +44,10 @@ private:
 	lept_value(std::string&& s);
 	lept_value(double d);
 	lept_value(int i);
-	lept_value(std::vector<lept_value>&& arr);
-	lept_value(std::map<std::string, lept_value>&& obj);
+	lept_value(array_t&& arr);
+	lept_value(const array_t& arr);
+	lept_value(object_t&& obj);
+	lept_value(const object_t& obj);
 	lept_value(std::nullptr_t) noexcept;
 	lept_value(const char* str) : lept_value(std::string(str)) {}
 	lept_value(bool b)
@@ -95,7 +97,7 @@ private:
 	lept_value get_object_value(std::string key);
 	size_t get_object_size() const;
 	void set_object(object_t&& obj);
-	void set_object(const std::map<std::string, lept_value>& mp);
+	void set_object(const object_t& mp);
 	const object_t& get_object() const
 	{
 		assert(type == lept_type::object);
