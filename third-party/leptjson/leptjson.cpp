@@ -476,6 +476,7 @@ const lept_value& lept_value::get_array_element(size_t index) const {
 }
 
 bool lept_value::contains_key(std::string key) {
+	assert(type == lept_type::object);
 	return (v.obj.count(key) != 0);
 }
 
