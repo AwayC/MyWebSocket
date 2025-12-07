@@ -315,11 +315,11 @@ void test_template()
 		2, 3.0, true, "away", nullptr
 	};
 
-	EXPECT_EQ_INT(true, obj.is<lept_value::object_t>());
-	EXPECT_EQ_INT(true, arr.is<lept_value::array_t>());
-	EXPECT_EQ_INT(2, arr[0].get<int>());
+	EXPECT_EQ_INT(true, obj.is<const lept_value::object_t>());
+	EXPECT_EQ_INT(true, arr.is<const lept_value::array_t&>());
+	EXPECT_EQ_INT(2, arr[0].get<const int>());
 	EXPECT_EQ_DOUBLE(3.0, arr[1].get<double>());
-	EXPECT_EQ_INT(true, arr[2].get<bool>());
+	EXPECT_EQ_INT(true, arr[2].get<const bool>());
 	EXPECT_EQ_STRING("away", arr[3].get<std::string>().c_str(), arr[3].get<std::string>().size());
 	EXPECT_EQ_INT(true, arr[4].is<nullptr_t>());
 }

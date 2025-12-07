@@ -111,7 +111,15 @@ private:
 	}
 
 	template<typename T>
-	bool is() const;
+	bool is() const {
+		using U = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
+
+		if (std::is_same<T, U>::value) {
+			return false;
+		}
+
+		return is<U>();
+	}
 
 #define IS_TYPE(ctype, jtype)		\
 template<> inline bool is<ctype>() const { \
@@ -128,11 +136,21 @@ return type == lept_type::jtype; \
 
 #undef IS_TYPE
 
-	template<typename T>
-	T& get();
+#include <type_traits>
 
 	template<typename T>
-	const T& get() const;
+	T& get() {
+		// 将 T (如 const std::string&) 转换为原始类型 U (如 std::string)
+		using U = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
+		// 转发调用特化版本 get<U>()
+		return const_cast<T&>(this->get<U>());
+	}
+
+	template<typename T>
+	const T& get() const {
+		using U = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
+		return get<U>();
+	}
 
 #define GET_STATIC(ctype, var)  \
 	template<> inline ctype get<ctype>() const { \
