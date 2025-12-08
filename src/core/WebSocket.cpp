@@ -104,7 +104,7 @@ void WsSession::recv_cb(uv_stream_t* stream,
             std::cerr << "recv err: " << uv_err_name(nread) << std::endl;
         } else
         {
-            std::cout << "connection closed" << std::endl;
+            std::cout << "websocket connection closed" << std::endl;
         }
 
         self->close();

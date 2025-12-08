@@ -39,7 +39,7 @@ HttpServer::Session::Session(uv_tcp_t *client, HttpServer* owner) : m_client(cli
 HttpServer::Session::~Session()
 {
     delete[] m_recvBuf.base;
-    std::cout << "session destroyed" << std::endl;
+    std::cout << "http session destroyed" << std::endl;
 }
 
 std::shared_ptr<httpResp> HttpServer::Session::initResp()
@@ -58,7 +58,7 @@ std::shared_ptr<httpResp> HttpServer::Session::initResp()
                 self->startKeepAliveTimer();
             } else
             {
-                std::cout << "close connection" << std::endl;
+                std::cout << "http close connection" << std::endl;
                 self->close();
             }
         }
