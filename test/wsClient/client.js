@@ -1,51 +1,65 @@
 const WebSocket = require('ws');
 
-const serverAddress = 'ws://localhost:8080';
+// 目标地址
+const WS_URL = 'ws://localhost:8080/ws';
 
-const ws = new WebSocket(serverAddress);
+console.log(`🚀 准备连接到: ${WS_URL}`);
 
-let pingInterval;
-
-ws.on('open', function open() {
-  console.log('✅ 连接成功！已连接到服务器:', serverAddress);
-
-  const testMessage = '你好，服务器！我是 Node.js 客户端。';
-  ws.send(testMessage);
-  console.log(`[发送] -> ${testMessage}`);
-
-  // --- 修改部分：使用 ws.ping() 发送心跳 ---
-  pingInterval = setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) {
-      const pingMessage = `ping from client at ${new Date().toLocaleTimeString()}`;
-
-      // 发送一个真正的 PING 帧
-      // 你可以不带任何数据 ws.ping()，也可以像这样带上数据
-      ws.ping(pingMessage);
-
-      console.log(`[心跳] -> 发送 PING 帧: ${pingMessage}`);
-    }
-  }, 10000);
+const ws = new WebSocket(WS_URL, {
+  perMessageDeflate: false // 再次强调：必须禁用压缩，否则测不出解析器 BUG
 });
 
-// --- 新增部分：监听服务器的 PONG 响应 ---
-// PONG 响应不会触发 'message' 事件，而是触发 'pong' 事件
-ws.on('pong', function pong(data) {
-  const pongMessage = data.toString('utf8');
-  console.log(`[心跳] <- 收到 PONG 帧: ${pongMessage}`);
+ws.on('open', function open() {
+  console.log('✅ WebSocket 连接成功！开始发送长 Token 测试...');
+
+  // --- 场景 1: 中等长度 Token (模拟普通 JWT) ---
+  // 长度: ~500 字节
+  // 预期: 触发服务器 16位 长度解析逻辑 (Payload = 126)
+  const mediumToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." + "A".repeat(400) + ".Signature";
+  const msg1 = JSON.stringify(['login_req', mediumToken]);
+
+  console.log(`\n[发送] 场景 1: 中长消息 (${Buffer.byteLength(msg1)} bytes)`);
+  console.log(`       用于测试 16位 长度解析 (之前左移 1 位那个 BUG)`);
+  ws.send(msg1);
+
+  // --- 场景 2: 超长 Token (压力测试) ---
+  // 长度: ~70KB (65536 +)
+  // 预期: 触发服务器 64位 长度解析逻辑 (Payload = 127)
+  // 注意: 这取决于你服务器的 buffer 是否够大，不够大可能会断开，但解析逻辑必须是对的
+  const hugeToken = "BIG_TOKEN_PREFIX_" + "B".repeat(70000);
+  console.log(`\n[发送] 场景 2: 超长消息 (${hugeToken.length} bytes)`);
+  console.log(`       用于测试 64位 长度解析`);
+  ws.send(hugeToken);
 });
 
 ws.on('message', function incoming(data) {
-  const message = data.toString('utf8');
-  console.log(`[接收] <- ${message}`);
+  const msg = data.toString('utf8');
+  const len = Buffer.byteLength(data);
+
+  console.log(`\n<< [接收] 服务器回包，长度: ${len}`);
+
+  // 验证回包内容摘要
+  if (len < 100) {
+    console.log(`   内容: "${msg}"`);
+  } else {
+    console.log(`   内容(前50字符): "${msg.substring(0, 50)}..."`);
+    console.log(`   内容(后50字符): "...${msg.substring(len - 50)}"` );
+  }
+
+  // 验证逻辑
+  if (msg.includes("A".repeat(20))) {
+    console.log("   ✅ 成功：服务器正确解析了中长消息！(16位长度逻辑通过)");
+  }
+  if (msg.includes("B".repeat(20))) {
+    console.log("   ✅ 成功：服务器正确解析了超长消息！(64位长度逻辑通过)");
+  }
 });
 
 ws.on('close', function close(code, reason) {
-  console.log(`❌ 连接已关闭。关闭代码: ${code}, 原因: ${reason.toString('utf8') || '无'}`);
-  clearInterval(pingInterval);
+  console.log(`\n❌ 连接断开。代码: ${code}`);
+  process.exit(0);
 });
 
 ws.on('error', function error(err) {
-  console.error('❗️ 发生错误:', err.message);
+  console.error(`❗️ 发生错误: ${err.message}`);
 });
-
-console.log(`🚀 正在尝试连接到 ${serverAddress}...`);

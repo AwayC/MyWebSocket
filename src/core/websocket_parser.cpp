@@ -6,6 +6,8 @@
 
 #include <cassert>
 
+#define LIMIT_PAYLOAD_LEN   (1024 * 1024)
+
 std::string WsErr_Str(WsParseErr err)
 {
 #define WsErr_Str(err) case WsParseErr::err : return #err
@@ -25,15 +27,15 @@ std::string WsErr_Str(WsParseErr err)
 }
 
 #define SWITCH_TO_MASK(frame) do {\
-    if (mask) \
+    if ((frame)->mask) \
     { \
         m_status = Status::maskKey; \
         m_byteNeed = 4; \
-        frame->mask_key.clear(); \
+        (frame)->mask_key.clear(); \
     } else \
     { \
         m_status = Status::payload; \
-        m_byteNeed = frame->payload_len; \
+        m_byteNeed = (frame)->payload_len; \
     } \
     }while (0)
 
@@ -49,7 +51,6 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, size_t len, WsFrame* fr
     const char* data_ = data.base;
     m_frame = frame;
     const char* ch;
-    bool mask = false;
 
     if (len == 0)
     {
@@ -78,7 +79,7 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, size_t len, WsFrame* fr
 
         case Status::payloadLenAndMask:
         {
-            frame->mask = mask = GET_MASK(*ch);
+            frame->mask = GET_MASK(*ch);
             frame->payload_len = GET_PAYLOAD_LEN(*ch);
 
             if (frame->payload_len <= 125)
@@ -102,7 +103,7 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, size_t len, WsFrame* fr
         {
             if (m_byteNeed)
             {
-                frame->payload_len = (frame->payload_len << 1) + (*ch);
+                frame->payload_len = (frame->payload_len << 8) | (static_cast<uint8_t>(*ch));
                 m_byteNeed --;
             }
             if (!m_byteNeed)
@@ -129,9 +130,16 @@ WsParseErr websocket_parser::parse(const uv_buf_t& data, size_t len, WsFrame* fr
 
         case Status::payload:
         {
+            if (frame->payload_len > LIMIT_PAYLOAD_LEN)
+            {
+                m_status = Status::finAndOpcode;
+                m_isContinuation = false;
+                return WsParseErr::INVALID_PAYLOAD_LEN;
+            }
+
             size_t to_read = std::min(static_cast<size_t>(data_ + len - ch),
-                                    frame->payload_len);
-            if (mask)
+                                    m_byteNeed);
+            if (frame->mask)
             {
                 for (size_t i = 0;i < to_read;i ++)
                 {

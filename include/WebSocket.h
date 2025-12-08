@@ -95,10 +95,12 @@ private:
         void setMsg(std::string&& str)
         {
             m_str = std::move(str);
+            isFile = false;
         }
         void setMsg(const char* str)
         {
             m_str = std::string(str);
+            isFile = false;
         }
         void setMsg(FileReader* reader)
         {
@@ -109,10 +111,11 @@ private:
         {
             m_str.clear();
         }
-        bool isFile;
+        bool isFile = false;
         FileReader* m_reader;
         uv_write_t req;
         std::vector<uv_buf_t> m_buffers;
+        WsSessionPtr m_owner;
     };
 
     //netWorking
