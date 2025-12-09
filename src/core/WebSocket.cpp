@@ -63,9 +63,8 @@ void WsSession::close()
         delete handle;
     });
 
-    m_owner->removeWsSession(shared_from_this());
-
     WS_CALLBACK(m_onCloseCb, shared_from_this());
+    m_owner->removeWsSession(shared_from_this());
 
 }
 
