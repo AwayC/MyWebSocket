@@ -391,7 +391,7 @@ void lept_value::free() {
 		case lept_type::array:
 			v.arr.~vector(); break;
 		case lept_type::object :
-			v.obj.~map();
+			v.obj.~map(); break;
 		default:
 			break;
 	}
@@ -475,7 +475,7 @@ const lept_value& lept_value::get_array_element(size_t index) const {
 	return v.arr[index];
 }
 
-bool lept_value::contains_key(std::string key) {
+bool lept_value::contains_key(std::string key) const {
 	assert(type == lept_type::object);
 	return (v.obj.count(key) != 0);
 }

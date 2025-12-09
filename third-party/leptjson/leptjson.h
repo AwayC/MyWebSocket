@@ -93,7 +93,7 @@ private:
 	void set_array(std::vector<lept_value>&& val);
 	void set_array(const array_t& arr);
 
-	bool contains_key(std::string key);
+	bool contains_key(std::string key) const;
 	lept_value get_object_value(std::string key);
 	size_t get_object_size() const;
 	void set_object(object_t&& obj);

@@ -324,6 +324,7 @@ void test_template()
 	EXPECT_EQ_DOUBLE(3.0, arr[1].get<double>());
 	EXPECT_EQ_INT(true, arr[2].get<const bool>());
 	EXPECT_EQ_STRING("away", arr[3].get<std::string>().c_str(), arr[3].get<std::string>().size());
+	EXPECT_EQ_STRING("away", arr[3].get<const std::string&>().c_str(), arr[3].get<const std::string&>().size());
 	EXPECT_EQ_INT(true, arr[4].is<nullptr_t>());
 }
 
