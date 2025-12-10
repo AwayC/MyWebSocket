@@ -317,6 +317,7 @@ std::string lept_value::typeStr(lept_type t)
 		switch (t) {
 			CASE_(null, null)
 			CASE_(boolean, boolean)
+			CASE_(integer, integer)
 			CASE_(number, number)
 			CASE_(string, string)
 			CASE_(array, array)
