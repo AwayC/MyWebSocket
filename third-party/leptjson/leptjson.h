@@ -111,74 +111,13 @@ private:
 	}
 
 	template<typename T>
-	bool is() const {
-		using U = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
-
-		if (std::is_same<T, U>::value) {
-			return false;
-		}
-
-		return is<U>();
-	}
-
-#define IS_TYPE(ctype, jtype)		\
-template<> inline bool is<ctype>() const { \
-return type == lept_type::jtype; \
-}
-
-	IS_TYPE(std::nullptr_t, null);
-	IS_TYPE(bool, boolean);
-	IS_TYPE(double, number);
-	IS_TYPE(int, integer);
-	IS_TYPE(std::string, string);
-	IS_TYPE(array_t, array);
-	IS_TYPE(object_t, object);
-
-#undef IS_TYPE
-
-#include <type_traits>
+	bool is() const ;
 
 	template<typename T>
-	T& get() {
-		// 将 T (如 const std::string&) 转换为原始类型 U (如 std::string)
-		using U = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
-		// 转发调用特化版本 get<U>()
-		return const_cast<T&>(this->get<U>());
-	}
+	T& get() ;
 
 	template<typename T>
-	const T& get() const {
-		using U = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
-		return get<U>();
-	}
-
-#define GET_STATIC(ctype, var)  \
-	template<> inline ctype get<ctype>() const { \
-		return (var); \
-	} \
-	template<> inline ctype& get<ctype>() = delete; \
-	template<> inline const ctype& get<ctype>() const = delete;
-
-#define GET(ctype, var) \
-	template<> inline const ctype& get<ctype>() const { \
-		assert(is<ctype>()); \
-		return (var); \
-	} \
-	template<> inline ctype& get<ctype>() { \
-		assert(is<ctype>()); \
-		return (var); \
-	}
-
-	GET(bool, v.b);
-	GET(double, v.n);
-	GET(int, v.i);
-
-	GET(std::string, v.s);
-	GET(array_t, v.arr);
-	GET(object_t, v.obj);
-
-#undef GET_STATIC
-#undef GET
+	const T& get() const ;
 
 
 	lept_value& operator[](const std::string& key)
@@ -222,3 +161,69 @@ enum  {
 	LEPT_PARSE_MISS_COLON,
 	LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET
 };
+
+template<typename T>
+	bool lept_value::is() const {
+	using U = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
+
+	if (std::is_same<T, U>::value) {
+		return false;
+	}
+
+	return is<U>();
+}
+
+#define IS_TYPE(ctype, jtype)		\
+template<> inline bool lept_value::is<ctype>() const { \
+	return type == lept_type::jtype; \
+}
+
+IS_TYPE(std::nullptr_t, null);
+IS_TYPE(bool, boolean);
+IS_TYPE(double, number);
+IS_TYPE(int, integer);
+IS_TYPE(std::string, string);
+IS_TYPE(lept_value::array_t, array);
+IS_TYPE(lept_value::object_t, object);
+
+#undef IS_TYPE
+
+template<typename T>
+T& lept_value::get() {
+	using U = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
+	return const_cast<T&>(this->get<U>());
+}
+
+template<typename T>
+const T& lept_value::get() const {
+	using U = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
+	return get<U>();
+}
+
+#define GET_STATIC(ctype, var)  \
+template<> inline ctype lept_value::get<ctype>() const { \
+	return (var); \
+} \
+template<> inline ctype& lept_value::get<ctype>() = delete; \
+template<> inline const ctype& get<ctype>() const = delete;
+
+#define GET(ctype, var) \
+template<> inline const ctype& lept_value::get<ctype>() const { \
+assert(is<ctype>()); \
+return (var); \
+} \
+template<> inline ctype& lept_value::get<ctype>() { \
+assert(is<ctype>()); \
+return (var); \
+}
+
+GET(bool, v.b);
+GET(double, v.n);
+GET(int, v.i);
+
+GET(std::string, v.s);
+GET(lept_value::array_t, v.arr);
+GET(lept_value::object_t, v.obj);
+
+#undef GET_STATIC
+#undef GET
