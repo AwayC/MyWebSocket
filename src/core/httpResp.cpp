@@ -6,6 +6,54 @@
 
 #include <cassert>
 #include "httpserver.h"
+#include <filesystem>
+
+namespace fs = std::filesystem;
+
+static std::string getMimeType(const std::string& path)
+{
+    static const std::unordered_map<std::string, std::string> mimeTypes = {
+        // --- 文本/网页 ---
+        {".html", "text/html"},
+        {".htm",  "text/html"},
+        {".css",  "text/css"},
+        {".js",   "application/javascript"},
+        {".json", "application/json"},
+        {".txt",  "text/plain"},
+        {".map",  "application/json"},
+
+        // --- 字体文件 ---
+        {".ttf",   "font/ttf"},
+        {".woff",  "font/woff"},
+        {".woff2", "font/woff2"},
+        {".eot",   "application/vnd.ms-fontobject"},
+        {".otf",   "font/otf"},
+
+        // --- 图片 ---
+        {".png",  "image/png"},
+        {".jpg",  "image/jpeg"},
+        {".jpeg", "image/jpeg"},
+        {".gif",  "image/gif"},
+        {".svg",  "image/svg+xml"},
+        {".ico",  "image/x-icon"},
+        {".webp", "image/webp"},
+
+        // --- 多媒体 ---
+        {".mp3",  "audio/mpeg"},
+        {".mp4",  "video/mp4"}
+    };
+
+    auto ext = fs::path(path).extension().string();
+
+    auto it = mimeTypes.find(ext);
+    if (it != mimeTypes.end()) {
+        return it->second;
+    }
+
+    return "application/octet-stream";
+}
+
+
 
 std::string httpStatus_str(httpStatus status)
 {
@@ -71,7 +119,7 @@ httpResp::~httpResp()
 
 void httpResp::sendFile(const std::string& path)
 {
-    m_headers["Content-Type"] = "application/octet-stream";
+    m_headers["Content-Type"] = getMimeType(path);
     m_filePath = path;
     m_sendType = SendType::FILE;
     // read file

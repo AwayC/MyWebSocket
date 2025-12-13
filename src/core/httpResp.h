@@ -13,7 +13,6 @@
 #include <functional>
 #include "FileReader.h"
 
-
 class httpResp;
 
 enum class httpStatus

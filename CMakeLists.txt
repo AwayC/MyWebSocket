@@ -90,3 +90,9 @@ target_link_libraries(test_jwt
         websocket
         jwt-cpp::jwt-cpp
 )
+
+#test sendfile
+add_executable(test_sendfile test/test_sendfile.cpp)
+target_link_libraries(test_sendfile
+        websocket
+)
