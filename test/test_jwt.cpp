@@ -2,7 +2,7 @@
 // Created by AWAY on 25-11-10.
 //
 
-#include "websocket.h"
+#include "WebSocket.h"
 #include <iostream>
 #include <thread>
 

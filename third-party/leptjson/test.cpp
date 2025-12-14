@@ -7,6 +7,7 @@
 #include <vector> 
 #include "leptjson.h" 
 #include <cstdio>
+#include <cstring>
 
 
 static int main_ret = 0;
