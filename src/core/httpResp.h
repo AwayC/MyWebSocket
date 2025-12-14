@@ -9,6 +9,7 @@
 #include <iostream>
 #include <unordered_map>
 #include "uv.h"
+#include <memory>
 #include "leptjson.h"
 #include <functional>
 #include "FileReader.h"

@@ -6,6 +6,7 @@
 #include <uv.h>
 #include <iostream>
 #include <functional>
+#include <memory>
 
 #define DEFAULT_FILE_READER_BUFF_SIZE 1024
 

@@ -8,6 +8,7 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <memory>
 
 #include "uv.h"
 #include "http_parser.h"

@@ -8,6 +8,7 @@
 #include "../src/core/websocket_parser.h"
 #include "leptjson.h"
 #include "../src/util/jwt.h"
+#include <memory>
 
 #define WSSESSION_ALLOC_SIZE 32
 enum class WsStatus {

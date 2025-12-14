@@ -11,7 +11,6 @@
 #include <unordered_map>
 #include "uv.h"
 
-
 using HttpParamMap = std::unordered_map<std::string, std::string>;
 using HeaderMap = std::unordered_map<std::string, std::string>;
 
