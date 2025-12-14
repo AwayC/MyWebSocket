@@ -16,6 +16,7 @@
 #include "../src/core/httpResp.h"
 #include "../src/util/ssl.h"
 #include "../src/core/httpRouter.h"
+#include <atomic>
 
 #define HTTP_DEFAULT_PORT 8081
 #define HTTP_DEFAULT_KEEP_ALIVE_TIMEOUT 20

@@ -6,6 +6,8 @@
 #include <string>
 #include <cstring>
 #include <iostream>
+#include <functional>
+#include <vector>
 #include "uv.h"
 
 /**
