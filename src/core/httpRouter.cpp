@@ -41,7 +41,8 @@ httpRouter::RouterHandler httpRouter::dispatch(httpReq* req)
     {
         if (std::regex_match(path, match_results, route.pattern))
         {
-            for (size_t i = 1;i < match_results.size();i++)
+            size_t param_len = std::min(match_results.size(), route.paramNames.size());
+            for (size_t i = 1;i < param_len;i++)
             {
                 req->params[route.paramNames[i - 1]] = match_results[i].str();
             }

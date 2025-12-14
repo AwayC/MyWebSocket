@@ -26,6 +26,7 @@ public:
         std::vector<std::string> paramNames;
     };
 
+    // 多余通配符会导致错误
     void addRoute(http_method method,
                 const std::string& pattern_str,
                 RouterHandler handler);
