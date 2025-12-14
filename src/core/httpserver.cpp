@@ -6,7 +6,6 @@
 #include <cassert>
 #include <iostream>
 #include <unordered_map>
-#include <sys/proc.h>
 #include <fstream>
 #include <filesystem>
 
