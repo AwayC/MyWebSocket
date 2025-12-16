@@ -49,13 +49,10 @@ void WsSession::connect()
 
 }
 
-
-void WsSession::close()
+void WsSession::inter_close()
 {
-    if (readyState == WsStatus::CLOSED)
-        return ;
-
     readyState = WsStatus::CLOSED;
+
     uv_read_stop(m_client);
 
     uv_close((uv_handle_t*)m_client, [](uv_handle_t* handle)
@@ -65,7 +62,14 @@ void WsSession::close()
 
     WS_CALLBACK(m_onCloseCb, shared_from_this());
     m_owner->removeWsSession(shared_from_this());
+}
 
+void WsSession::close()
+{
+    if (readyState == WsStatus::CLOSED)
+        return ;
+
+    inter_close();
 }
 
 void WsSession::recv_alloc_cb(uv_handle_t* handle,
@@ -93,6 +97,7 @@ void WsSession::recv_cb(uv_stream_t* stream,
                         ssize_t nread,
                         const uv_buf_t* buf)
 {
+    std::cout << "ws recv_cb" << std::endl;
     WsSession* self = static_cast<WsSession*>(stream->data);
     assert(self != nullptr);
 
@@ -106,11 +111,11 @@ void WsSession::recv_cb(uv_stream_t* stream,
             std::cout << "websocket connection closed" << std::endl;
         }
 
-        self->close();
+        self->inter_close();
         return ;
     }
 
-    if (buf->base)
+    if (buf->base && self->readyState == WsStatus::OPEN)
     {
         self->handleMessage(nread);
     }
@@ -125,7 +130,7 @@ void WsSession::handleMessage(size_t nread)
         std::cerr << "websocket session parse err: " << WsErr_Str(err) << std::endl;
         std::runtime_error ex("websocket session parse error");
         WS_CALLBACK(m_onErrorCb, shared_from_this(), ex);
-        close();
+        inter_close();
         return ;
     }
 }
@@ -137,7 +142,7 @@ void WsSession::handleWsFrame()
     {
         std::cerr << "websocket message no mask" << std::endl;
         WS_CALLBACK(m_onErrorCb, shared_from_this(), static_cast<std::exception>(std::runtime_error("websocket message no mask")));
-        close();
+        inter_close();
         return ;
     }
 
@@ -149,7 +154,7 @@ void WsSession::handleWsFrame()
             sendPong();
             break;
         case WS_CLOSE:
-            close();
+            inter_close();
             break;
         default:
             WS_CALLBACK(m_onMessageCb, shared_from_this());
@@ -261,7 +266,7 @@ void WsSession::inter_send(WriteCtx* ctx, uint8_t opcode)
             auto ss = context->m_owner;
             WS_CALLBACK(ss->m_onErrorCb, ss, static_cast<std::exception>(std::runtime_error("websocket send error")));
             delete context;
-            ss->close();
+            ss->inter_close();
         }
 
         std::cout << "websocket send success" << std::endl;

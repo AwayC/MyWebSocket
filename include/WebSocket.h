@@ -141,5 +141,5 @@ private:
     void sendPong();
 
     void inter_send(WriteCtx* ctx, uint8_t opcode);
-    void inter_sendFile(FileReader* reader);
+    void inter_close();
 };
