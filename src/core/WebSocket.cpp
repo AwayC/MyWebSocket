@@ -19,6 +19,7 @@ WsSession::WsSession(const HttpServer::SessionPtr& session, WsServer* owner) :
     m_loop(session->getLoop()),
     m_owner(owner)
 {
+    m_recvBuf = uv_buf_init(nullptr, 0);
     // recvBuf 继承自 httpSession
     session->transferBufferToWsSession(&m_recvBuf);
     readyState = WsStatus::CLOSED;
